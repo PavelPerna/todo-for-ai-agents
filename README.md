@@ -18,7 +18,15 @@ Setting `agentTodo.dir` (default `.todo`) points the view at another directory i
 `agent/agent-instructions.md` is the same contract as a snippet for AGENTS.md, Copilot instructions or `.cursorrules`.
 Both are deliberately generic: the agent agrees an `onDone` with you per list, keeps items short, and acts on what you tick.
 
-## Driving the view from an agent
+## MCP server (preferred agent interface)
+
+`mcp/server.js` is a dependency-free MCP server (stdio) over the same `.todo/` files. Tools: `list_lists`, `read_list`, `create_list` (refuses without an `onDone`), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`. Errors come back to the agent as tool errors instead of warnings to the human.
+
+- **VS Code (Copilot agent mode):** the extension registers the server automatically; it appears under MCP servers as "TODO Lists for AI Agents".
+- **Claude Code:** `claude mcp add todo -- node <extension dir>/mcp/server.js --dir <workspace>/.todo` (the extension dir is `~/.vscode-server/extensions/pavelperna.todo-for-ai-agents-<v>` or a clone of this repo).
+- **Anything else:** run `node mcp/server.js --dir <workspace>/.todo` as a stdio server.
+
+## Driving the view from an agent (fallback without MCP)
 
 Two equivalent interfaces, one for agents that can run VS Code commands, one for agents that only have a shell:
 

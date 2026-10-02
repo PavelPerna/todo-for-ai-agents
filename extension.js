@@ -217,6 +217,14 @@ function activate(context) {
     context.subscriptions.push(fw, cw);
     consumeFocus(); consumeCmd();
   }
+  // MCP: offer the bundled stdio server to VS Code's MCP clients (Copilot agent mode) when the API is available (VS Code ≥ 1.101).
+  if (vscode.lm && typeof vscode.lm.registerMcpServerDefinitionProvider === 'function' && d) {
+    const server = () => new vscode.McpStdioServerDefinition('TODO Lists for AI Agents', process.execPath, [context.asAbsolutePath('mcp/server.js'), '--dir', d]);
+    context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('agentTodo.mcp', {
+      provideMcpServerDefinitions: () => [server()],
+      resolveMcpServerDefinition: def => def,
+    }));
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand('agentTodo.showList', showList),
     vscode.commands.registerCommand('agentTodo.markAllDone', async name => { if (!name) name = await vscode.window.showQuickPick(lists().map(listData).filter(l => l.open > 0).map(l => l.name)); if (name) runVerb('markAll', name); }),

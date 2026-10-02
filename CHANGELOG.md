@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 1.1.0
+- MCP server (`mcp/server.js`, stdio, no dependencies): tools `list_lists`, `read_list`, `create_list` (onDone required), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`. The extension registers it for VS Code MCP clients (Copilot agent mode); Claude Code and others add it with one command. `.cmd` and `.focus` stay as the zero-dependency fallback.
+- Requires VS Code 1.101+ (MCP server definition API).
 ## 1.0.1
 - Left column counts mean what the group is about: open items in **active**, ticked items in **done**, archived items in **archive**, per list and as the group total (they used to show open items everywhere, so done/archive always read 0).
 

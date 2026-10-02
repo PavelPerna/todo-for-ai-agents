@@ -41,6 +41,6 @@ ct = '''<?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"><Default Extension=".json" ContentType="application/json"/><Default Extension=".js" ContentType="application/javascript"/><Default Extension=".vsixmanifest" ContentType="text/xml"/><Default Extension=".md" ContentType="text/markdown"/><Default Extension=".png" ContentType="image/png"/><Default Extension="" ContentType="text/plain"/></Types>'''
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
     z.writestr('extension.vsixmanifest', manifest); z.writestr('[Content_Types].xml', ct)
-    for f in ('package.json', 'extension.js', 'lib.js', 'i18n.js', 'README.md', 'CHANGELOG.md', 'LICENSE', 'icon.png'):
+    for f in ('package.json', 'extension.js', 'lib.js', 'i18n.js', 'mcp/server.js', 'mcp/store.js', 'README.md', 'CHANGELOG.md', 'LICENSE', 'icon.png'):
         z.write(f, 'extension/' + f)
 print(out)
