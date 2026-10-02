@@ -105,6 +105,7 @@ function html(webview, data, emptyNote) {
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });
  $('collapse').addEventListener('click', () => { st.collapsed = !st.collapsed; save(); drawLeft(); });
  $('lists').addEventListener('click', e => { const d = e.target.closest('.lst[data-name]'); if (!d) return; st.sel = d.dataset.name; save(); drawLeft(); drawRight(); });
+ window.addEventListener('message', e => { const m = e.data || {}; if (m.type === 'select' && DATA.some(l => l.name === m.name)) { st.sel = m.name; st.q = ''; $('search').value = ''; save(); drawLeft(); drawRight(); } });
  $('right').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (!b) return; vscode.postMessage({ act: b.dataset.act, list: st.sel, line: Number(b.dataset.line) }); });
 </script></body></html>`;
 }
@@ -174,7 +175,26 @@ function activate(context) {
     context.subscriptions.push(watcher);
     try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
   }
+  const showList = async (name) => {
+    if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: 'List to show' }); if (!name) return; }
+    await vscode.commands.executeCommand('agentTodo.view.focus');
+    if (view) { refresh(); setTimeout(() => view.webview.postMessage({ type: 'select', name }), 50); }
+  };
+  const focusFile = () => { const d = dir(); return d ? path.join(d, '.focus') : null; };
+  const consumeFocus = () => {
+    const f = focusFile(); if (!f) return;
+    let name; try { name = fs.readFileSync(f, 'utf8').trim(); } catch (_) { return; }
+    try { fs.unlinkSync(f); } catch (_) {}
+    if (name) showList(name);
+  };
+  if (d) {
+    const fw = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '.focus'));
+    fw.onDidCreate(consumeFocus); fw.onDidChange(consumeFocus);
+    context.subscriptions.push(fw);
+    consumeFocus();
+  }
   context.subscriptions.push(
+    vscode.commands.registerCommand('agentTodo.showList', showList),
     vscode.commands.registerCommand('agentTodo.refresh', refresh),
     vscode.commands.registerCommand('agentTodo.open', async () => {
       const all = lists(); if (!all.length) return;

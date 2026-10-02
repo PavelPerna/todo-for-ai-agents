@@ -18,6 +18,11 @@ Setting `agentTodo.dir` (default `.todo`) points the view at another directory i
 `agent/agent-instructions.md` is the same contract as a snippet for AGENTS.md, Copilot instructions or `.cursorrules`.
 Both are deliberately generic: the agent agrees an `onDone` with you per list, keeps items short, and acts on what you tick.
 
+## Switching the visible list from an agent
+
+- Command `agentTodo.showList` (argument: list name; without it a quick pick opens) focuses the panel and selects the list — for agents that can run VS Code commands.
+- Writing a list name into `.todo/.focus` does the same from a shell: `echo standup > .todo/.focus`. The file is consumed (deleted) once applied.
+
 ## File format
 
 See `.todo.example/`. One list per `<name>.md`:
