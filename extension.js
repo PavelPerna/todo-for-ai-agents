@@ -19,7 +19,7 @@ function today() { const d = new Date(); return `${d.getDate()}. ${d.getMonth() 
 function dir() {
   const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
   if (!folder) return null;
-  return path.join(folder.uri.fsPath, vscode.workspace.getConfiguration('claudeTodo').get('dir', '.todo'));
+  return path.join(folder.uri.fsPath, vscode.workspace.getConfiguration('agentTodo').get('dir', '.todo'));
 }
 function lists() {
   const d = dir();
@@ -150,7 +150,7 @@ function activate(context) {
     const d = dir();
     view.webview.html = html(view.webview, all.map(listData), `${d || 'no workspace'} is empty — Claude writes lists there as <name>.md`);
   };
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider('claudeTodo.view', {
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider('agentTodo.view', {
     resolveWebviewView(webviewView) {
       view = webviewView;
       webviewView.webview.options = { enableScripts: true };
@@ -175,8 +175,8 @@ function activate(context) {
     try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
   }
   context.subscriptions.push(
-    vscode.commands.registerCommand('claudeTodo.refresh', refresh),
-    vscode.commands.registerCommand('claudeTodo.open', async () => {
+    vscode.commands.registerCommand('agentTodo.refresh', refresh),
+    vscode.commands.registerCommand('agentTodo.open', async () => {
       const all = lists(); if (!all.length) return;
       const pick = all.length === 1 ? all[0].name : await vscode.window.showQuickPick(all.map(l => l.name));
       const l = all.find(x => x.name === pick); if (l) vscode.window.showTextDocument(vscode.Uri.file(l.file));

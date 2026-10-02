@@ -1,16 +1,16 @@
-# Claude TODO — VS Code view
+# TODO Lists for AI Agents by Pavel Perna
 
-Panel view rendering live todo lists that Claude Code writes into `<workspace>/.todo/<name>.md`.
+Panel view rendering live todo lists that your AI coding agent (Claude Code, GitHub Copilot, Cursor, …) writes into `<workspace>/.todo/<name>.md`.
 Ticking toggles `[ ]`/`[x]` in the file; "hide done" moves ticked items to `<name>.done.md` with a date;
-each list carries an `onDone:` header line Claude acts on when items land in `.done`.
+each list carries an `onDone:` header line the agent acts on when items land in `.done`.
 
 Build & install (WSL):
 
     python3 build-vsix.py
-    ~/.vscode-server/bin/*/bin/remote-cli/code --install-extension claude-todo-view-<v>.vsix
+    ~/.vscode-server/bin/*/bin/remote-cli/code --install-extension todo-for-ai-agents-<v>.vsix
     # VS Code: Developer: Reload Window
 
-Setting `claudeTodo.dir` (default `.todo`) points the view at another directory in the first workspace folder.
+Setting `agentTodo.dir` (default `.todo`) points the view at another directory in the first workspace folder.
 
 ## File format
 
@@ -24,3 +24,5 @@ See `.todo.example/`. One list per `<name>.md`:
 
 `<name>.done.md` is written by the view's "hide done" button: `- [x] text _(hotovo d. m. yyyy)_`.
 Lists are shown alphabetically in the left column; the right column shows the selected one.
+
+Independent project by Pavel Perna. Not affiliated with Anthropic, GitHub, Microsoft or any AI vendor.
