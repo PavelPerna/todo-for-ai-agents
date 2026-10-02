@@ -2,6 +2,8 @@
 
 
 ## 0.6.0
+- `.focus` is decoded with UTF-16 or UTF-8 BOM awareness (PowerShell 5.1 `>` writes UTF-16LE).
+- Pure list logic moved to `lib.js` with `node --test` coverage; CI builds the .vsix on every PR.
 - `agentTodo.showList` command and `.todo/.focus` file: an agent (or you) can focus the panel and select a list; the focus file is consumed once applied.
 ## 0.5.0
 - First Marketplace release. Named "TODO Lists for AI Agents by Pavel Perna"; view container, commands and setting are now `agentTodo.*`.
