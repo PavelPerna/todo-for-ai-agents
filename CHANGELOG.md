@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 0.9.0
+- Agent interface for every action: commands `agentTodo.markAllDone`, `agentTodo.archive` (next to `showList`) and a `.todo/.cmd` file with `show|markAll|archive <name>` lines, consumed once applied. `.focus` stays as a shortcut for `show`.
+
 ## 0.8.0
 - The selected list uses the same **active / done** grouping as the list column, plus a collapsed **archive** section for `<name>.done.md`.
 - UI localized (en, cs) from `vscode.env.language`; strings live in `i18n.js`. The markdown data format is unchanged.

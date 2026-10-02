@@ -16,9 +16,17 @@ They tick items themselves. You fill the lists and react to what they ticked.
 - Names: a ticket key (`PROJ-123`) or a topic (`standup`, `release`). The view sorts alphabetically and has a filter.
 - The view watches the directory and redraws within ~60 ms of a write. No refresh call needed.
 
-## Pointing the human at a list
+## Driving the view
 
-After adding or changing items, you may bring the list into view: run the VS Code command `agentTodo.showList` with the list name, or from a shell `echo <name> > .todo/.focus` (the file is consumed). Do it when the human asked to see it or when a decision now waits on them; do not do it on every edit.
+Three actions, each available as a VS Code command (argument: list name) or as a line in `.todo/.cmd` for shell-only agents; the file is consumed once applied and may hold several lines:
+
+| Action | Command | `.cmd` line |
+| --- | --- | --- |
+| bring a list into view | `agentTodo.showList` | `show <name>` |
+| tick every open item | `agentTodo.markAllDone` | `markAll <name>` |
+| move ticked items to `<name>.done.md` | `agentTodo.archive` | `archive <name>` |
+
+Use `show` when the human asked to see a list or a decision now waits on them, not on every edit. Use `markAll` only when the human said the whole list is done. Use `archive` instead of editing `.done.md` yourself; it keeps order and dates consistent. Shell example: `printf 'markAll PROJ-123\narchive PROJ-123\n' > .todo/.cmd`.
 
 ## Procedures
 
@@ -32,6 +40,6 @@ After adding or changing items, you may bring the list into view: run the VS Cod
 
 ## Don'ts
 
-- Don't write `.done.md` by hand; the button keeps order and dates consistent.
+- Don't write `.done.md` by hand; use `archive` (button, command or `.cmd`) so order and dates stay consistent.
 - Don't paste paragraphs into items. Markdown links and inline code are fine.
 - Don't use these lists as your scratchpad; they are the human's view of the work.

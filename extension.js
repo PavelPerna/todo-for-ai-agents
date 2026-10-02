@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
-const { TASK, esc, inline, formatDate, focusName, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
+const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
 const i18n = require('./i18n');
 
 function today() { return formatDate(new Date()); }
@@ -180,6 +180,23 @@ function activate(context) {
     await vscode.commands.executeCommand('agentTodo.view.focus');
     if (view) { refresh(); setTimeout(() => view.webview.postMessage({ type: 'select', name }), 50); }
   };
+  const byName = name => lists().find(l => l.name === name);
+  const runVerb = (verb, name) => {
+    const list = byName(name);
+    if (verb === 'show') return showList(name);
+    if (!list) { vscode.window.showWarningMessage(`Agent TODO: no list named "${name}"`); return; }
+    if (verb === 'markAll') markAll(list); else if (verb === 'archive') hideDone(list);
+    refresh();
+  };
+  const cmdFile = () => { const d = dir(); return d ? path.join(d, '.cmd') : null; };
+  const consumeCmd = () => {
+    const f = cmdFile(); if (!f) return;
+    let buf; try { buf = fs.readFileSync(f); } catch (_) { return; }
+    try { fs.unlinkSync(f); } catch (_) {}
+    const { ok, bad } = parseCommands(buf);
+    for (const c of ok) runVerb(c.verb, c.list);
+    if (bad.length) vscode.window.showWarningMessage(`Agent TODO: ignored in .cmd: ${bad.join(' | ')}`);
+  };
   const focusFile = () => { const d = dir(); return d ? path.join(d, '.focus') : null; };
   const consumeFocus = () => {
     const f = focusFile(); if (!f) return;
@@ -190,11 +207,15 @@ function activate(context) {
   if (d) {
     const fw = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '.focus'));
     fw.onDidCreate(consumeFocus); fw.onDidChange(consumeFocus);
-    context.subscriptions.push(fw);
-    consumeFocus();
+    const cw = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '.cmd'));
+    cw.onDidCreate(consumeCmd); cw.onDidChange(consumeCmd);
+    context.subscriptions.push(fw, cw);
+    consumeFocus(); consumeCmd();
   }
   context.subscriptions.push(
     vscode.commands.registerCommand('agentTodo.showList', showList),
+    vscode.commands.registerCommand('agentTodo.markAllDone', async name => { if (!name) name = await vscode.window.showQuickPick(lists().map(listData).filter(l => l.open > 0).map(l => l.name)); if (name) runVerb('markAll', name); }),
+    vscode.commands.registerCommand('agentTodo.archive', async name => { if (!name) name = await vscode.window.showQuickPick(lists().map(l => l.name)); if (name) runVerb('archive', name); }),
     vscode.commands.registerCommand('agentTodo.refresh', refresh),
     vscode.commands.registerCommand('agentTodo.open', async () => {
       const all = lists(); if (!all.length) return;
