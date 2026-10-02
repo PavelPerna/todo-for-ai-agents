@@ -64,7 +64,14 @@ test('i18n: every key exists in every language, all plain strings, same placehol
   const langs = Object.keys(I.STRINGS); const ref = I.STRINGS.en;
   const ph = s => (String(s).match(/\{\w+\}/g) || []).sort().join(',');
   for (const l of langs) for (const k of Object.keys(ref)) { assert.equal(typeof I.STRINGS[l][k], 'string', `${l}.${k}`); assert.equal(ph(I.STRINGS[l][k]), ph(ref[k]), `${l}.${k} placeholders`); }
-  assert.equal(I.fmt(I.STRINGS.cs.hideDone, { n: 3 }), 'skrýt hotové (3) → .done');
+  assert.equal(I.fmt(I.STRINGS.cs.hideDone, { n: 3 }), 'archivovat hotové (3) → .done');
   assert.equal(I.fmt(I.STRINGS.en.restore, { name: 'x' }), 'restore to x');
   assert.equal(I.fmt('{a} {b}', { a: 1 }), '1 {b}');
+});
+
+test('markAllDone ticks every open task and reports the count', () => {
+  const r = L.markAllDone(['# l', '- [ ] a', '- [x] b', 'text', '  * [ ] c']);
+  assert.deepEqual(r.lines, ['# l', '- [x] a', '- [x] b', 'text', '  * [x] c']);
+  assert.equal(r.changed, 2);
+  assert.equal(L.markAllDone(['- [x] a']).changed, 0);
 });

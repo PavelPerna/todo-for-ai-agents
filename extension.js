@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
-const { TASK, esc, inline, formatDate, focusName, parseList, toggleLine, splitDone, appendRows, takeRow } = require('./lib');
+const { TASK, esc, inline, formatDate, focusName, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
 const i18n = require('./i18n');
 
 function today() { return formatDate(new Date()); }
@@ -42,7 +42,8 @@ function html(webview, data, emptyNote, lang) {
  #collapse{all:unset;cursor:pointer;opacity:.6;padding:0 3px} #collapse:hover{opacity:1}
  #lists{overflow:auto;flex:1} .lst{display:flex;justify-content:space-between;gap:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .lst:hover{background:var(--vscode-list-hoverBackground)} .lst.sel{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}
- .lst .n{opacity:.6;font-size:.85em} .lst .n.zero{opacity:.3}
+ .lst .n{opacity:.6;font-size:.85em} .lst .n.zero{opacity:.3} .lst .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+ .lst .act{all:unset;cursor:pointer;opacity:0;padding:0 4px;color:var(--vscode-textLink-foreground)} .lst:hover .act{opacity:.8} .lst .act:hover{opacity:1}
  .grp{padding:6px 8px 2px;font-size:.78em;letter-spacing:.04em;text-transform:uppercase;opacity:.5;cursor:default} summary.grp{cursor:pointer;list-style:none} summary.grp::-webkit-details-marker{display:none} details.done-grp .lst{opacity:.7}
  #right{flex:1;overflow:auto;padding:4px 12px;line-height:1.45}
  h2{font-size:1em;margin:6px 0 4px;color:var(--vscode-textLink-foreground)} h3{font-size:.9em;margin:6px 0 2px;opacity:.8}
@@ -69,7 +70,12 @@ function html(webview, data, emptyNote, lang) {
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
    const q = st.q.toLowerCase();
-   const row = l => \`<div class="lst\${l.name === st.sel ? ' sel' : ''}" data-name="\${esc(l.name)}"><span>\${esc(l.name)}</span><span class="n\${l.open ? '' : ' zero'}">\${l.open}</span></div>\`;
+   const row = l => {
+     const act = l.open > 0
+       ? '<button class="act" data-act="markAll" data-list="' + esc(l.name) + '" title="' + T.markAll + '">☑</button>'
+       : (l.checked > 0 ? '<button class="act" data-act="hide" data-list="' + esc(l.name) + '" title="' + T.archiveList + '">⇩</button>' : '');
+     return '<div class="lst' + (l.name === st.sel ? ' sel' : '') + '" data-name="' + esc(l.name) + '"><span class="nm">' + esc(l.name) + '</span>' + act + '<span class="n' + (l.open ? '' : ' zero') + '">' + l.open + '</span></div>';
+   };
    const shown = DATA.filter(l => l.name.toLowerCase().includes(q));
    const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0);
    let out = '';
@@ -102,7 +108,9 @@ function html(webview, data, emptyNote, lang) {
  $('search').addEventListener('input', e => { st.q = e.target.value; save(); drawLeft(); });
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });
  $('collapse').addEventListener('click', () => { st.collapsed = !st.collapsed; save(); drawLeft(); });
- $('lists').addEventListener('click', e => { const d = e.target.closest('.lst[data-name]'); if (!d) return; st.sel = d.dataset.name; save(); drawLeft(); drawRight(); });
+ $('lists').addEventListener('click', e => {
+   const a = e.target.closest('button.act'); if (a) { e.stopPropagation(); vscode.postMessage({ act: a.dataset.act, list: a.dataset.list }); return; }
+   const d = e.target.closest('.lst[data-name]'); if (!d) return; st.sel = d.dataset.name; save(); drawLeft(); drawRight(); });
  window.addEventListener('message', e => { const m = e.data || {}; if (m.type === 'select' && DATA.some(l => l.name === m.name)) { st.sel = m.name; st.q = ''; $('search').value = ''; save(); drawLeft(); drawRight(); } });
  $('right').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (!b) return; vscode.postMessage({ act: b.dataset.act, list: st.sel, line: Number(b.dataset.line) }); });
 </script></body></html>`;
@@ -112,6 +120,10 @@ function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
 function toggle(list, lineIndex) {
   const out = toggleLine(readLines(list.file), lineIndex);
   if (out) writeLines(list.file, out);
+}
+function markAll(list) {
+  const r = markAllDone(readLines(list.file));
+  if (r.changed) writeLines(list.file, r.lines);
 }
 function hideDone(list) {
   const { kept, moved } = splitDone(readLines(list.file), today());
@@ -144,6 +156,7 @@ function activate(context) {
         const list = lists().find(l => l.name === msg.list);
         if (!list) return;
         if (msg.act === 'toggle') toggle(list, msg.line);
+        else if (msg.act === 'markAll') markAll(list);
         else if (msg.act === 'hide') hideDone(list);
         else if (msg.act === 'undo') undo(list, msg.line);
         refresh();
