@@ -4,6 +4,7 @@ Paste this into whatever file your agent reads at session start. Replace `.todo`
 
 ```markdown
 ## Live TODO lists (.todo/)
+- Prefer the `todo-for-ai-agents` MCP tools when configured (`list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`); the rules below describe the files they manage.
 - The human watches `.todo/<name>.md` in a VS Code panel and ticks items there. You maintain the lists; they tick.
 - A list = `# <name>`, then `onDone: <what to do when an item is archived>`, then `- [ ]` / `- [x]` items. Agree the onDone with the human before creating a list.
 - On every state change of the work, update the matching list. Keep items short. Never un-tick a human's tick.

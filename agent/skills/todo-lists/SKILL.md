@@ -16,7 +16,11 @@ They tick items themselves. You fill the lists and react to what they ticked.
 - Names: a ticket key (`PROJ-123`) or a topic (`standup`, `release`). The view sorts alphabetically and has a filter.
 - The view watches the directory and redraws within ~60 ms of a write. No refresh call needed.
 
-## Driving the view
+## Prefer the MCP tools
+
+If the `todo-for-ai-agents` MCP server is available (tools `list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`), use them instead of editing files: `create_list` enforces the onDone contract, errors come back to you, and `show` brings the list into view. The file format below is still the truth; edit files directly only when the MCP server is not configured.
+
+## Driving the view (fallback without MCP)
 
 Three actions, each available as a VS Code command (argument: list name) or as a line in `.todo/.cmd` for shell-only agents; the file is consumed once applied and may hold several lines:
 

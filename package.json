@@ -2,7 +2,7 @@
   "name": "todo-for-ai-agents",
   "displayName": "TODO Lists for AI Agents by Pavel Perna",
   "description": "Live, human-tickable TODO lists written by your AI coding agent (Claude Code, GitHub Copilot, Cursor, …) into .todo/*.md, shown in a VS Code panel. Each list carries an onDone contract. Independent project by Pavel Perna.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "PavelPerna",
   "author": {
     "name": "Pavel Perna"
@@ -31,7 +31,7 @@
     "agentic"
   ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.101.0"
   },
   "main": "./extension.js",
   "activationEvents": [
@@ -104,6 +104,12 @@
           "description": "Directory (relative to the first workspace folder) holding <name>.md and <name>.done.md lists"
         }
       }
-    }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "agentTodo.mcp",
+        "label": "TODO Lists for AI Agents"
+      }
+    ]
   }
 }
