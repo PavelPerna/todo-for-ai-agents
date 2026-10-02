@@ -31,6 +31,12 @@ test('Store.createList creates .todo/ in a fresh workspace (Copilot review on PR
   assert.equal(s.listLists()[0].open, 1);
 });
 
+test('Store.currentList reads .state and tolerates its absence', () => {
+  const s = new Store(tmp()); assert.deepEqual(s.currentList(), { selected: null, updatedAt: null });
+  fs.writeFileSync(path.join(s.dir, '.state'), JSON.stringify({ selected: 'PR6', updatedAt: '2026-10-02T20:00:00.000Z' }));
+  assert.equal(s.currentList().selected, 'PR6');
+});
+
 test('Store.show appends to .cmd', () => {
   const s = new Store(tmp()); s.createList('a', 'nothing'); s.show('a');
   assert.equal(fs.readFileSync(path.join(s.dir, '.cmd'), 'utf8'), 'show a\n');
@@ -51,7 +57,7 @@ test('MCP server answers initialize, tools/list and tools/call over stdio', asyn
   const msgs = out.join('').trim().split('\n').map(JSON.parse);
   assert.equal(msgs.length, 4);
   assert.equal(msgs[0].result.serverInfo.name, 'todo-for-ai-agents');
-  assert.equal(msgs[1].result.tools.length, 8);
+  assert.equal(msgs[1].result.tools.length, 9);
   assert.equal(msgs[2].result.structuredContent.items[0].text, 'book cabin');
   assert.equal(msgs[3].result.isError, true); assert.match(msgs[3].result.content[0].text, /no list named/);
   assert.ok(fs.existsSync(path.join(dir, 'trip.md')));

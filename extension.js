@@ -65,7 +65,7 @@ function html(webview, data, emptyNote, lang) {
  const fmt = (str, vars) => String(str).replace(/\\{(\\w+)\\}/g, (_, k) => (k in vars ? vars[k] : '{' + k + '}'));
  let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false, archiveOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
- function save() { vscode.setState(st); }
+ function save() { vscode.setState(st); vscode.postMessage({ act: 'selected', list: st.sel }); }
  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
@@ -123,6 +123,14 @@ function html(webview, data, emptyNote, lang) {
 }
 
 function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
+// .todo/.state tells agents which list the human is looking at; written on every selection change.
+function writeState(selected) {
+  const d = dir(); if (!d || !fs.existsSync(d)) return;
+  const p = path.join(d, '.state');
+  const next = JSON.stringify({ selected: selected || null, updatedAt: new Date().toISOString() });
+  let prev = ''; try { prev = fs.readFileSync(p, 'utf8'); } catch (_) {}
+  if (!prev || JSON.parse(prev).selected !== (selected || null)) fs.writeFileSync(p, next);
+}
 function toggle(list, lineIndex) {
   const out = toggleLine(readLines(list.file), lineIndex);
   if (out) writeLines(list.file, out);
@@ -159,6 +167,7 @@ function activate(context) {
       view = webviewView;
       webviewView.webview.options = { enableScripts: true };
       webviewView.webview.onDidReceiveMessage(msg => {
+        if (msg.act === 'selected') { writeState(msg.list); return; }
         const list = lists().find(l => l.name === msg.list);
         if (!list) return;
         if (msg.act === 'toggle') toggle(list, msg.line);
