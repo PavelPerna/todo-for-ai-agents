@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 0.8.0
+- The selected list uses the same **active / done** grouping as the list column, plus a collapsed **archive** section for `<name>.done.md`.
+- UI localized (en, cs) from `vscode.env.language`; strings live in `i18n.js`. The markdown data format is unchanged.
+
 ## 0.7.0
 - Left column groups lists into **active** (at least one open item) and a collapsible **done** group (nothing open); a list moves between them as its items change. Default selection prefers an active list.
 
