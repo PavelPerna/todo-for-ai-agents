@@ -34,6 +34,6 @@ See `.todo.example/`. One list per `<name>.md`:
     - [x] ticked item, still visible until "hide done"
 
 `<name>.done.md` is written by the view's "hide done" button: `- [x] text _(hotovo d. m. yyyy)_`.
-Lists are shown alphabetically in the left column; the right column shows the selected one.
+Lists are shown alphabetically in the left column, grouped into **active** (open items) and a collapsible **done** group; the right column shows the selected one.
 
 Independent project by Pavel Perna. Not affiliated with Anthropic, GitHub, Microsoft or any AI vendor.
