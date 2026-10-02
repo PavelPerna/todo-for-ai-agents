@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { TASK, esc, inline, formatDate, focusName, parseList, toggleLine, splitDone, appendRows, takeRow } = require('./lib');
+const i18n = require('./i18n');
 
 function today() { return formatDate(new Date()); }
 
@@ -26,7 +27,9 @@ function listData(list) {
   return { name: list.name, items, done: done.reverse(), open: items.filter(x => x.kind === 'task' && !x.checked).length, checked: items.filter(x => x.kind === 'task' && x.checked).length };
 }
 
-function html(webview, data, emptyNote) {
+function html(webview, data, emptyNote, lang) {
+  const T = i18n.STRINGS[lang];
+  const TJ = JSON.stringify(T);
   const nonce = String(Math.random()).slice(2);
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
@@ -51,12 +54,14 @@ function html(webview, data, emptyNote) {
  p{margin:2px 0} .empty{opacity:.5;font-style:italic} em{opacity:.75} a{color:var(--vscode-textLink-foreground)}
  details{margin-top:6px} summary{cursor:pointer;opacity:.6;font-size:.85em}
 </style></head><body>
-<div id="left"><header><button id="collapse" title="sbalit / rozbalit">◀</button><input id="search" class="only-open" placeholder="hledat list…"></header><div id="lists" class="only-open"></div></div>
+<div id="left"><header><button id="collapse" title="${esc(T.collapse)}">◀</button><input id="search" class="only-open" placeholder="${esc(T.search)}"></header><div id="lists" class="only-open"></div></div>
 <div id="right"></div>
 <script nonce="${nonce}">
  const vscode = acquireVsCodeApi();
  const DATA = ${JSON.stringify(data)};
  const EMPTY = ${JSON.stringify(emptyNote)};
+ const T = ${TJ};
+ const fmt = (str, vars) => String(str).replace(/\\{(\\w+)\\}/g, (_, k) => (k in vars ? vars[k] : '{' + k + '}'));
  let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
  function save() { vscode.setState(st); }
@@ -68,24 +73,27 @@ function html(webview, data, emptyNote) {
    const shown = DATA.filter(l => l.name.toLowerCase().includes(q));
    const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0);
    let out = '';
-   out += '<div class="grp">active (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">nic</span></div>');
-   out += '<details class="done-grp"' + (st.doneOpen ? ' open' : '') + '><summary class="grp">done (' + done.length + ')</summary>' + (done.map(row).join('') || '<div class="lst"><span class="empty">nic</span></div>') + '</details>';
+   out += '<div class="grp">' + T.active + ' (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>');
+   out += '<details class="done-grp"' + (st.doneOpen ? ' open' : '') + '><summary class="grp">' + T.done + ' (' + done.length + ')</summary>' + (done.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>') + '</details>';
    $('lists').innerHTML = out;
    const dg = $('lists').querySelector('details.done-grp'); if (dg) dg.addEventListener('toggle', () => { st.doneOpen = dg.open; save(); });
  }
  function drawRight() {
    const l = DATA.find(x => x.name === st.sel);
    if (!l) { $('right').innerHTML = '<p class="empty">' + esc(EMPTY) + '</p>'; return; }
+   const task = it => '<div class="task' + (it.checked ? ' checked' : '') + '"><button class="box" data-act="toggle" data-line="' + it.i + '" title="' + (it.checked ? T.untick : T.tick) + '">' + (it.checked ? '☑' : '☐') + '</button><span>' + it.html + '</span></div>';
    const out = ['<h2>' + esc(l.name) + '</h2>'];
-   for (const it of l.items) {
-     if (it.kind === 'task') out.push('<div class="task' + (it.checked ? ' checked' : '') + '"><button class="box" data-act="toggle" data-line="' + it.i + '">' + (it.checked ? '☑' : '☐') + '</button><span>' + it.html + '</span></div>');
-     else if (it.kind === 'head') out.push('<h3>' + it.html + '</h3>');
-     else if (it.kind === 'ondone') out.push('<p class="ondone">onDone: ' + it.html + '</p>');
-     else out.push('<p>' + it.html + '</p>');
-   }
-   if (!l.open && !l.checked) out.push('<p class="empty">nic otevřeného</p>');
-   if (l.checked) out.push('<button class="hide" data-act="hide">hide done (' + l.checked + ') → .done</button>');
-   if (l.done.length) { out.push('<details><summary>.done (' + l.done.length + ')</summary>'); for (const d of l.done) out.push('<div class="task checked"><button class="box" data-act="undo" data-line="' + d.i + '">☑</button><span>' + d.html + '</span></div>'); out.push('</details>'); }
+   for (const it of l.items) if (it.kind === 'ondone') out.push('<p class="ondone">' + T.onDone + ': ' + it.html + '</p>');
+   const open = l.items.filter(it => it.kind === 'task' && !it.checked), checked = l.items.filter(it => it.kind === 'task' && it.checked);
+   const notes = l.items.filter(it => it.kind === 'head' || it.kind === 'text');
+   out.push('<div class="grp">' + T.active + ' (' + open.length + ')</div>');
+   out.push(open.map(task).join('') || '<p class="empty">' + T.nothingOpen + '</p>');
+   for (const it of notes) out.push(it.kind === 'head' ? '<h3>' + it.html + '</h3>' : '<p>' + it.html + '</p>');
+   out.push('<details class="done-grp" open><summary class="grp">' + T.done + ' (' + checked.length + ')</summary>');
+   out.push(checked.map(task).join('') || '<p class="empty">' + T.nothing + '</p>');
+   if (checked.length) out.push('<button class="hide" data-act="hide">' + fmt(T.hideDone, { n: checked.length }) + '</button>');
+   out.push('</details>');
+   if (l.done.length) { out.push('<details><summary class="grp">' + T.archive + ' (' + l.done.length + ')</summary>'); for (const d of l.done) out.push('<div class="task checked"><button class="box" data-act="undo" data-line="' + d.i + '" title="' + fmt(T.restore, { name: l.name }) + '">☑</button><span>' + d.html + '</span></div>'); out.push('</details>'); }
    $('right').innerHTML = out.join('');
  }
  if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
@@ -124,7 +132,9 @@ function activate(context) {
     if (!view) return;
     const all = lists();
     const d = dir();
-    view.webview.html = html(view.webview, all.map(listData), `${d || 'no workspace'} is empty — Claude writes lists there as <name>.md`);
+    const lang = i18n.pick(vscode.env.language);
+    const T = i18n.STRINGS[lang];
+    view.webview.html = html(view.webview, all.map(listData), i18n.fmt(T.empty, { dir: d || T.noWorkspace }), lang);
   };
   context.subscriptions.push(vscode.window.registerWebviewViewProvider('agentTodo.view', {
     resolveWebviewView(webviewView) {
@@ -151,7 +161,7 @@ function activate(context) {
     try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
   }
   const showList = async (name) => {
-    if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: 'List to show' }); if (!name) return; }
+    if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: i18n.STRINGS[i18n.pick(vscode.env.language)].pickList }); if (!name) return; }
     await vscode.commands.executeCommand('agentTodo.view.focus');
     if (view) { refresh(); setTimeout(() => view.webview.postMessage({ type: 'select', name }), 50); }
   };
