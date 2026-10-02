@@ -1,0 +1,71 @@
+{
+  "name": "claude-todo-view",
+  "displayName": "Claude TODO",
+  "description": "Live todo lists from .todo/<name>.md; ticking moves items to <name>.done.md",
+  "version": "0.4.2",
+  "publisher": "pavel-local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "claudeTodo",
+          "title": "Claude TODO",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "claudeTodo": [
+        {
+          "type": "webview",
+          "id": "claudeTodo.view",
+          "name": ".todo",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeTodo.open",
+        "title": "Claude TODO: Open list",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "claudeTodo.refresh",
+        "title": "Claude TODO: Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeTodo.open",
+          "when": "view == claudeTodo.view",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeTodo.refresh",
+          "when": "view == claudeTodo.view",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude TODO",
+      "properties": {
+        "claudeTodo.dir": {
+          "type": "string",
+          "default": ".todo",
+          "description": "Directory (relative to the first workspace folder) holding <name>.md and <name>.done.md lists"
+        }
+      }
+    }
+  }
+}
