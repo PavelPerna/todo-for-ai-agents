@@ -12,6 +12,12 @@ Build & install (WSL):
 
 Setting `agentTodo.dir` (default `.todo`) points the view at another directory in the first workspace folder.
 
+## Teaching your agent
+
+`agent/skills/todo-lists/SKILL.md` is a ready-made Claude Code skill (copy into `~/.claude/skills/`);
+`agent/agent-instructions.md` is the same contract as a snippet for AGENTS.md, Copilot instructions or `.cursorrules`.
+Both are deliberately generic: the agent agrees an `onDone` with you per list, keeps items short, and acts on what you tick.
+
 ## File format
 
 See `.todo.example/`. One list per `<name>.md`:
