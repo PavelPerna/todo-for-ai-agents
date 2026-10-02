@@ -16,6 +16,10 @@ They tick items themselves. You fill the lists and react to what they ticked.
 - Names: a ticket key (`PROJ-123`) or a topic (`standup`, `release`). The view sorts alphabetically and has a filter.
 - The view watches the directory and redraws within ~60 ms of a write. No refresh call needed.
 
+## Pointing the human at a list
+
+After adding or changing items, you may bring the list into view: run the VS Code command `agentTodo.showList` with the list name, or from a shell `echo <name> > .todo/.focus` (the file is consumed). Do it when the human asked to see it or when a decision now waits on them; do not do it on every edit.
+
 ## Procedures
 
 **Create a list.** First agree the `onDone` with the human: what should happen when they tick and hide an item (update a register, draft a ticket comment, nothing). Only then write the file. `onDone: nothing` is a valid answer; a missing onDone is not.

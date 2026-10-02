@@ -2,19 +2,9 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
-const TASK = /^(\s*[-*]\s+)\[([ xX])\]\s+(.*)$/;
+const { TASK, esc, inline, formatDate, focusName, parseList, toggleLine, splitDone, appendRows, takeRow } = require('./lib');
 
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-function inline(s) {
-  s = esc(s);
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-  s = s.replace(/(^|[^_])_([^_]+)_/g, '$1<em>$2</em>');
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-  return s;
-}
-function today() { const d = new Date(); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; }
+function today() { return formatDate(new Date()); }
 
 function dir() {
   const folder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
@@ -30,15 +20,7 @@ function lists() {
 function readLines(p) { try { return fs.readFileSync(p, 'utf8').split('\n'); } catch (_) { return []; } }
 
 function listData(list) {
-  const items = [];
-  readLines(list.file).forEach((line, i) => {
-    const m = line.match(TASK);
-    if (m) { items.push({ kind: 'task', i, checked: m[2] !== ' ', html: inline(m[3]) }); return; }
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) { if (i > 0) items.push({ kind: 'head', html: inline(h[2]) }); return; }
-    if (/^onDone:/i.test(line)) { items.push({ kind: 'ondone', html: inline(line.replace(/^onDone:\s*/i, '')) }); return; }
-    if (line.trim()) items.push({ kind: 'text', html: inline(line.replace(/^\s*[-*]\s+/, '')) });
-  });
+  const items = parseList(readLines(list.file));
   const done = [];
   readLines(list.done).forEach((line, i) => { const m = line.match(TASK); if (m) done.push({ i, html: inline(m[3]) }); });
   return { name: list.name, items, done: done.reverse(), open: items.filter(x => x.kind === 'task' && !x.checked).length, checked: items.filter(x => x.kind === 'task' && x.checked).length };
@@ -105,41 +87,27 @@ function html(webview, data, emptyNote) {
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });
  $('collapse').addEventListener('click', () => { st.collapsed = !st.collapsed; save(); drawLeft(); });
  $('lists').addEventListener('click', e => { const d = e.target.closest('.lst[data-name]'); if (!d) return; st.sel = d.dataset.name; save(); drawLeft(); drawRight(); });
+ window.addEventListener('message', e => { const m = e.data || {}; if (m.type === 'select' && DATA.some(l => l.name === m.name)) { st.sel = m.name; st.q = ''; $('search').value = ''; save(); drawLeft(); drawRight(); } });
  $('right').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (!b) return; vscode.postMessage({ act: b.dataset.act, list: st.sel, line: Number(b.dataset.line) }); });
 </script></body></html>`;
 }
 
 function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
-function stamp(text) { return text.replace(/\s*_\(hotovo \d+\. \d+\. \d{4}\)_\s*$/, ''); }
-function appendTasks(p, title, rows) {
-  const target = readLines(p);
-  if (target.every(l => !l.trim())) target.splice(0, target.length, `# ${title}`, '');
-  while (target.length && !target[target.length - 1].trim()) target.pop();
-  target.push(...rows, '');
-  writeLines(p, target);
-}
 function toggle(list, lineIndex) {
-  const lines = readLines(list.file);
-  const m = (lines[lineIndex] || '').match(TASK);
-  if (!m) return;
-  lines[lineIndex] = `${m[1]}[${m[2] === ' ' ? 'x' : ' '}] ${m[3]}`;
-  writeLines(list.file, lines);
+  const out = toggleLine(readLines(list.file), lineIndex);
+  if (out) writeLines(list.file, out);
 }
 function hideDone(list) {
-  const lines = readLines(list.file);
-  const moved = [];
-  const kept = lines.filter(line => { const m = line.match(TASK); if (m && m[2] !== ' ') { moved.push(`- [x] ${stamp(m[3])} _(hotovo ${today()})_`); return false; } return true; });
+  const { kept, moved } = splitDone(readLines(list.file), today());
   if (!moved.length) return;
   writeLines(list.file, kept);
-  appendTasks(list.done, `${list.name} — done`, moved);
+  writeLines(list.done, appendRows(readLines(list.done), `${list.name} — done`, moved));
 }
 function undo(list, lineIndex) {
-  const lines = readLines(list.done);
-  const m = (lines[lineIndex] || '').match(TASK);
-  if (!m) return;
-  lines.splice(lineIndex, 1);
-  writeLines(list.done, lines);
-  appendTasks(list.file, list.name, [`- [ ] ${stamp(m[3])}`]);
+  const taken = takeRow(readLines(list.done), lineIndex);
+  if (!taken) return;
+  writeLines(list.done, taken.rest);
+  writeLines(list.file, appendRows(readLines(list.file), list.name, [taken.row]));
 }
 
 function activate(context) {
@@ -174,7 +142,26 @@ function activate(context) {
     context.subscriptions.push(watcher);
     try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
   }
+  const showList = async (name) => {
+    if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: 'List to show' }); if (!name) return; }
+    await vscode.commands.executeCommand('agentTodo.view.focus');
+    if (view) { refresh(); setTimeout(() => view.webview.postMessage({ type: 'select', name }), 50); }
+  };
+  const focusFile = () => { const d = dir(); return d ? path.join(d, '.focus') : null; };
+  const consumeFocus = () => {
+    const f = focusFile(); if (!f) return;
+    let name; try { name = focusName(fs.readFileSync(f)); } catch (_) { return; }
+    try { fs.unlinkSync(f); } catch (_) {}
+    if (name) showList(name);
+  };
+  if (d) {
+    const fw = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '.focus'));
+    fw.onDidCreate(consumeFocus); fw.onDidChange(consumeFocus);
+    context.subscriptions.push(fw);
+    consumeFocus();
+  }
   context.subscriptions.push(
+    vscode.commands.registerCommand('agentTodo.showList', showList),
     vscode.commands.registerCommand('agentTodo.refresh', refresh),
     vscode.commands.registerCommand('agentTodo.open', async () => {
       const all = lists(); if (!all.length) return;

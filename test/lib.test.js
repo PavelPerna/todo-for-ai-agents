@@ -1,0 +1,56 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const L = require('../lib');
+
+test('focusName decodes UTF-16LE with BOM as PowerShell 5.1 writes it', () => {
+  const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('standup\r\n', 'utf16le')]);
+  assert.equal(L.focusName(buf), 'standup');
+});
+test('focusName decodes UTF-8 with and without BOM, trims and strips quotes', () => {
+  assert.equal(L.focusName(Buffer.from('﻿"PROJ-123"\n')), 'PROJ-123');
+  assert.equal(L.focusName(Buffer.from('  garden  \n')), 'garden');
+  assert.equal(L.focusName(Buffer.from('\n\nweekend-trip')), 'weekend-trip');
+  assert.equal(L.focusName(Buffer.alloc(0)), '');
+});
+test('focusName decodes UTF-16BE with BOM', () => {
+  const be = Buffer.from('abc', 'utf16le').swap16();
+  assert.equal(L.focusName(Buffer.concat([Buffer.from([0xfe, 0xff]), be])), 'abc');
+});
+
+test('parseList classifies tasks, headings, onDone and text; title line is skipped', () => {
+  const items = L.parseList(['# garden', 'onDone: log it', '', '- [ ] water', '- [x] prune', '## notes', 'plain', '- bullet']);
+  assert.deepEqual(items.map(i => i.kind), ['ondone', 'task', 'task', 'head', 'text', 'text']);
+  assert.equal(items[1].checked, false); assert.equal(items[1].i, 3);
+  assert.equal(items[2].checked, true);
+  assert.equal(items[0].html, 'log it');
+});
+
+test('toggleLine flips the box and leaves non-tasks alone', () => {
+  assert.deepEqual(L.toggleLine(['- [ ] a'], 0), ['- [x] a']);
+  assert.deepEqual(L.toggleLine(['  * [X] a'], 0), ['  * [ ] a']);
+  assert.equal(L.toggleLine(['# title'], 0), null);
+  assert.equal(L.toggleLine([], 5), null);
+});
+
+test('splitDone moves ticked rows with a date stamp and keeps the rest in order', () => {
+  const { kept, moved } = L.splitDone(['# l', 'onDone: x', '- [ ] a', '- [x] b', 'text', '- [x] c _(hotovo 1. 1. 2020)_'], '2. 10. 2026');
+  assert.deepEqual(kept, ['# l', 'onDone: x', '- [ ] a', 'text']);
+  assert.deepEqual(moved, ['- [x] b _(hotovo 2. 10. 2026)_', '- [x] c _(hotovo 2. 10. 2026)_']);
+});
+
+test('appendRows creates a title on an empty body and trims trailing blanks', () => {
+  assert.deepEqual(L.appendRows([], 'l — done', ['- [x] a']), ['# l — done', '', '- [x] a', '']);
+  assert.deepEqual(L.appendRows(['# l', '', '- [ ] a', '', ''], 'l', ['- [ ] b']), ['# l', '', '- [ ] a', '- [ ] b', '']);
+});
+
+test('takeRow restores an archived row as an open task without the stamp', () => {
+  const r = L.takeRow(['# d', '', '- [x] a _(hotovo 2. 10. 2026)_'], 2);
+  assert.deepEqual(r, { rest: ['# d', ''], row: '- [ ] a' });
+  assert.equal(L.takeRow(['# d'], 0), null);
+});
+
+test('inline escapes HTML and renders code, bold, italics and links', () => {
+  assert.equal(L.inline('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
+  assert.equal(L.inline('`c` **b** *i* _u_ [t](https://x)'), '<code>c</code> <strong>b</strong> <em>i</em> <em>u</em> <a href="https://x">t</a>');
+});
