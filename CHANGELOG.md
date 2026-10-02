@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 1.0.1
+- Left column counts mean what the group is about: open items in **active**, ticked items in **done**, archived items in **archive**, per list and as the group total (they used to show open items everywhere, so done/archive always read 0).
+
 ## 0.9.0
 - `show` (command, `.cmd` or `.focus`) on a list that does not exist shows a warning instead of silently doing nothing.
 - Agent interface for every action: commands `agentTodo.markAllDone`, `agentTodo.archive` (next to `showList`) and a `.todo/.cmd` file with `show|markAll|archive <name>` lines, consumed once applied. `.focus` stays as a shortcut for `show`.

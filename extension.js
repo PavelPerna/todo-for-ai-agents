@@ -70,19 +70,23 @@ function html(webview, data, emptyNote, lang) {
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
    const q = st.q.toLowerCase();
-   const row = l => {
+   // Badge per list and the group total count what the group is about: open items, ticked items, archived items.
+   const count = { active: l => l.open, done: l => l.checked, archive: l => l.done.length };
+   const row = (l, kind) => {
      const act = l.open > 0
        ? '<button class="act" data-act="markAll" data-list="' + esc(l.name) + '" title="' + T.markAll + '">☑</button>'
        : (l.checked > 0 ? '<button class="act" data-act="hide" data-list="' + esc(l.name) + '" title="' + T.archiveList + '">⇩</button>' : '');
-     return '<div class="lst' + (l.name === st.sel ? ' sel' : '') + '" data-name="' + esc(l.name) + '"><span class="nm">' + esc(l.name) + '</span>' + act + '<span class="n' + (l.open ? '' : ' zero') + '">' + l.open + '</span></div>';
+     const n = count[kind](l);
+     return '<div class="lst' + (l.name === st.sel ? ' sel' : '') + '" data-name="' + esc(l.name) + '"><span class="nm">' + esc(l.name) + '</span>' + act + '<span class="n' + (n ? '' : ' zero') + '">' + n + '</span></div>';
    };
    const shown = DATA.filter(l => l.name.toLowerCase().includes(q));
    // Same three groups as the right pane: active (open items), done (ticked, not yet archived), archive (nothing left but the .done file, or empty).
    const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0 && l.checked > 0), archive = shown.filter(l => l.open === 0 && l.checked === 0);
-   const group = (cls, label, items, isOpen, stateKey) => '<details class="' + cls + '"' + (isOpen ? ' open' : '') + ' data-state="' + stateKey + '"><summary class="grp">' + label + ' (' + items.length + ')</summary>' + (items.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>') + '</details>';
-   let out = '<div class="grp">' + T.active + ' (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>');
-   out += group('done-grp', T.done, done, st.doneOpen, 'doneOpen');
-   out += group('archive-grp', T.archive, archive, st.archiveOpen, 'archiveOpen');
+   const sum = (items, kind) => items.reduce((a, l) => a + count[kind](l), 0);
+   const group = (cls, label, items, kind, isOpen, stateKey) => '<details class="' + cls + '"' + (isOpen ? ' open' : '') + ' data-state="' + stateKey + '"><summary class="grp">' + label + ' (' + sum(items, kind) + ')</summary>' + (items.map(l => row(l, kind)).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>') + '</details>';
+   let out = '<div class="grp">' + T.active + ' (' + sum(active, 'active') + ')</div>' + (active.map(l => row(l, 'active')).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>');
+   out += group('done-grp', T.done, done, 'done', st.doneOpen, 'doneOpen');
+   out += group('archive-grp', T.archive, archive, 'archive', st.archiveOpen, 'archiveOpen');
    $('lists').innerHTML = out;
    for (const dg of $('lists').querySelectorAll('details[data-state]')) dg.addEventListener('toggle', () => { st[dg.dataset.state] = dg.open; save(); });
  }
