@@ -40,6 +40,7 @@ function html(webview, data, emptyNote) {
  #lists{overflow:auto;flex:1} .lst{display:flex;justify-content:space-between;gap:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .lst:hover{background:var(--vscode-list-hoverBackground)} .lst.sel{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}
  .lst .n{opacity:.6;font-size:.85em} .lst .n.zero{opacity:.3}
+ .grp{padding:6px 8px 2px;font-size:.78em;letter-spacing:.04em;text-transform:uppercase;opacity:.5;cursor:default} summary.grp{cursor:pointer;list-style:none} summary.grp::-webkit-details-marker{display:none} details.done-grp .lst{opacity:.7}
  #right{flex:1;overflow:auto;padding:4px 12px;line-height:1.45}
  h2{font-size:1em;margin:6px 0 4px;color:var(--vscode-textLink-foreground)} h3{font-size:.9em;margin:6px 0 2px;opacity:.8}
  .ondone{font-size:.85em;opacity:.6;margin:0 0 6px;border-left:2px solid var(--vscode-panel-border);padding-left:6px}
@@ -56,15 +57,21 @@ function html(webview, data, emptyNote) {
  const vscode = acquireVsCodeApi();
  const DATA = ${JSON.stringify(data)};
  const EMPTY = ${JSON.stringify(emptyNote)};
- let st = Object.assign({ sel: null, collapsed: false, q: '' }, vscode.getState() || {});
+ let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
  function save() { vscode.setState(st); }
  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
    const q = st.q.toLowerCase();
-   $('lists').innerHTML = DATA.filter(l => l.name.toLowerCase().includes(q)).map(l =>
-     \`<div class="lst\${l.name === st.sel ? ' sel' : ''}" data-name="\${esc(l.name)}"><span>\${esc(l.name)}</span><span class="n\${l.open ? '' : ' zero'}">\${l.open}</span></div>\`).join('') || '<div class="lst"><span class="empty">nic</span></div>';
+   const row = l => \`<div class="lst\${l.name === st.sel ? ' sel' : ''}" data-name="\${esc(l.name)}"><span>\${esc(l.name)}</span><span class="n\${l.open ? '' : ' zero'}">\${l.open}</span></div>\`;
+   const shown = DATA.filter(l => l.name.toLowerCase().includes(q));
+   const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0);
+   let out = '';
+   out += '<div class="grp">active (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">nic</span></div>');
+   out += '<details class="done-grp"' + (st.doneOpen ? ' open' : '') + '><summary class="grp">done (' + done.length + ')</summary>' + (done.map(row).join('') || '<div class="lst"><span class="empty">nic</span></div>') + '</details>';
+   $('lists').innerHTML = out;
+   const dg = $('lists').querySelector('details.done-grp'); if (dg) dg.addEventListener('toggle', () => { st.doneOpen = dg.open; save(); });
  }
  function drawRight() {
    const l = DATA.find(x => x.name === st.sel);
@@ -81,7 +88,8 @@ function html(webview, data, emptyNote) {
    if (l.done.length) { out.push('<details><summary>.done (' + l.done.length + ')</summary>'); for (const d of l.done) out.push('<div class="task checked"><button class="box" data-act="undo" data-line="' + d.i + '">☑</button><span>' + d.html + '</span></div>'); out.push('</details>'); }
    $('right').innerHTML = out.join('');
  }
- if (!DATA.some(l => l.name === st.sel)) st.sel = DATA.length ? DATA[0].name : null;
+ if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
+ const selL = DATA.find(l => l.name === st.sel); if (selL && selL.open === 0) st.doneOpen = true;
  $('search').value = st.q; drawLeft(); drawRight();
  $('search').addEventListener('input', e => { st.q = e.target.value; save(); drawLeft(); });
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });

@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 0.7.0
+- Left column groups lists into **active** (at least one open item) and a collapsible **done** group (nothing open); a list moves between them as its items change. Default selection prefers an active list.
+
 ## 0.6.0
 - `.focus` is decoded with UTF-16 or UTF-8 BOM awareness (PowerShell 5.1 `>` writes UTF-16LE).
 - Pure list logic moved to `lib.js` with `node --test` coverage; CI builds the .vsix on every PR.
