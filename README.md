@@ -23,6 +23,10 @@ Both are deliberately generic: the agent agrees an `onDone` with you per list, k
 - Command `agentTodo.showList` (argument: list name; without it a quick pick opens) focuses the panel and selects the list — for agents that can run VS Code commands.
 - Writing a list name into `.todo/.focus` does the same from a shell: `echo standup > .todo/.focus`. The file is consumed (deleted) once applied.
 
+## Localization
+
+The view follows VS Code's display language; English and Czech ship in `i18n.js` (add a language by adding a block there). The files themselves stay language-neutral.
+
 ## File format
 
 See `.todo.example/`. One list per `<name>.md`:
@@ -34,6 +38,6 @@ See `.todo.example/`. One list per `<name>.md`:
     - [x] ticked item, still visible until "hide done"
 
 `<name>.done.md` is written by the view's "hide done" button: `- [x] text _(hotovo d. m. yyyy)_`.
-Lists are shown alphabetically in the left column, grouped into **active** (open items) and a collapsible **done** group; the right column shows the selected one.
+Lists are shown alphabetically in the left column, grouped into **active** (open items), **done** (ticked, not yet archived) and **archive** (nothing left but `.done`, or empty), the same three groups the right column uses; hovering a list reveals **mark all done** (active) or **archive → .done** (done). The right column shows the selected one with the same groups.
 
 Independent project by Pavel Perna. Not affiliated with Anthropic, GitHub, Microsoft or any AI vendor.

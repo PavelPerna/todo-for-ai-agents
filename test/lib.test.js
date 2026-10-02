@@ -54,3 +54,24 @@ test('inline escapes HTML and renders code, bold, italics and links', () => {
   assert.equal(L.inline('<b>x</b>'), '&lt;b&gt;x&lt;/b&gt;');
   assert.equal(L.inline('`c` **b** *i* _u_ [t](https://x)'), '<code>c</code> <strong>b</strong> <em>i</em> <em>u</em> <a href="https://x">t</a>');
 });
+
+const I = require('../i18n');
+test('i18n picks the base language and falls back to en', () => {
+  assert.equal(I.pick('cs'), 'cs'); assert.equal(I.pick('cs-CZ'), 'cs'); assert.equal(I.pick('en-US'), 'en');
+  assert.equal(I.pick('de'), 'en'); assert.equal(I.pick(undefined), 'en');
+});
+test('i18n: every key exists in every language, all plain strings, same placeholders', () => {
+  const langs = Object.keys(I.STRINGS); const ref = I.STRINGS.en;
+  const ph = s => (String(s).match(/\{\w+\}/g) || []).sort().join(',');
+  for (const l of langs) for (const k of Object.keys(ref)) { assert.equal(typeof I.STRINGS[l][k], 'string', `${l}.${k}`); assert.equal(ph(I.STRINGS[l][k]), ph(ref[k]), `${l}.${k} placeholders`); }
+  assert.equal(I.fmt(I.STRINGS.cs.hideDone, { n: 3 }), 'archivovat hotové (3) → .done');
+  assert.equal(I.fmt(I.STRINGS.en.restore, { name: 'x' }), 'restore to x');
+  assert.equal(I.fmt('{a} {b}', { a: 1 }), '1 {b}');
+});
+
+test('markAllDone ticks every open task and reports the count', () => {
+  const r = L.markAllDone(['# l', '- [ ] a', '- [x] b', 'text', '  * [ ] c']);
+  assert.deepEqual(r.lines, ['# l', '- [x] a', '- [x] b', 'text', '  * [x] c']);
+  assert.equal(r.changed, 2);
+  assert.equal(L.markAllDone(['- [x] a']).changed, 0);
+});

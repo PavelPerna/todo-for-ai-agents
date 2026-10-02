@@ -56,6 +56,13 @@ function toggleLine(lines, index) {
   return out;
 }
 
+/** Tick every open task; returns the new lines and how many changed. */
+function markAllDone(lines) {
+  let changed = 0;
+  const out = lines.map(line => { const m = line.match(TASK); if (m && m[2] === ' ') { changed++; return `${m[1]}[x] ${m[3]}`; } return line; });
+  return { lines: out, changed };
+}
+
 /** Split ticked tasks out of a list: { kept, moved } where moved are archive rows. */
 function splitDone(lines, today) {
   const moved = [];
@@ -84,4 +91,4 @@ function takeRow(lines, index) {
   return { rest, row: `- [ ] ${stamp(m[3])}` };
 }
 
-module.exports = { TASK, esc, inline, formatDate, stamp, decodeText, focusName, parseList, toggleLine, splitDone, appendRows, takeRow };
+module.exports = { TASK, esc, inline, formatDate, stamp, decodeText, focusName, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow };
