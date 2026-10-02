@@ -23,6 +23,14 @@ test('Store: create requires onDone, add/tick/markAll/archive round trip', () =>
   assert.throws(() => s.readList('nope'), /no list named/);
 });
 
+test('Store.createList creates .todo/ in a fresh workspace (Copilot review on PR #6)', () => {
+  const dir = path.join(tmp(), 'nested', '.todo');
+  assert.equal(fs.existsSync(dir), false);
+  const s = new Store(dir); s.createList('first', 'nothing', ['hello']);
+  assert.ok(fs.existsSync(path.join(dir, 'first.md')));
+  assert.equal(s.listLists()[0].open, 1);
+});
+
 test('Store.show appends to .cmd', () => {
   const s = new Store(tmp()); s.createList('a', 'nothing'); s.show('a');
   assert.equal(fs.readFileSync(path.join(s.dir, '.cmd'), 'utf8'), 'show a\n');

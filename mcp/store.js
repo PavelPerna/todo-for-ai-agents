@@ -40,6 +40,7 @@ class Store {
     this.assertName(name);
     if (this.exists(name)) throw new Error(`list "${name}" already exists`);
     if (typeof onDone !== 'string' || !onDone.trim()) throw new Error('onDone is required: agree it with the human first ("nothing" is a valid answer)');
+    fs.mkdirSync(this.dir, { recursive: true }); // first list in a fresh workspace: .todo/ does not exist yet
     writeLines(this.file(name), [`# ${name}`, `onDone: ${onDone.trim()}`, '', ...items.map(t => `- [ ] ${t}`), '']);
     return this.readList(name);
   }
