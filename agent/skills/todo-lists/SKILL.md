@@ -43,8 +43,8 @@ When the human says "this list" or "the open one", do not guess: call `current_l
 **Update.** On every state change of the work (PR ready, review in, decision taken, blocked, finished) edit the items in the matching list: add, reword, or mark `[x]` when you completed it yourself. Keep items short; this is a status board, not a log. Never un-tick what the human ticked.
 
 **React to "done" (the onDone contract).** Done = archived. Every archive appends an `archived` event to `.todo/.events.jsonl` (`{seq, at, list, items, onDone}`); the MCP tool `events({ since })` returns them after a `seq` cursor.
-- At session start: call `events` (or read the file) from the last `seq` you handled and perform each list's `onDone`. Keep the cursor.
-- Then subscribe so you act the moment the human archives: in Claude Code arm `Monitor` with `tail -n0 -F .todo/.events.jsonl` (re-arm on expiry or after a restart); other runtimes use their file watcher. Do not poll `*.done.md` by hand.
+- At session start, and after every re-arm: first arm the watcher (Claude Code: `Monitor` with `tail -n0 -F .todo/.events.jsonl`; other runtimes: a file watcher), **then** call `events({ since: cursor })` and perform each list's `onDone` in `seq` order; keep the cursor. Arming first means an archive that happens while you start up is caught by the pull.
+- A notification is a trigger, not the payload: on each one call `events({ since: cursor })` again and process in order. Do not poll `*.done.md` by hand.
 - Anything that leaves the machine (issue tracker, chat, PR comments) still goes out as a draft for the human to approve.
 
 **Delete a list.** When `<name>.md` is empty and the archive is no longer needed, remove both files after the human agrees.

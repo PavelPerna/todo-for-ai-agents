@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const L = require('../lib');
-const { appendEvent, readEvents } = require('./events');
+const { appendThen, readEvents } = require('./events');
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
@@ -73,8 +73,10 @@ class Store {
     this.assertExists(name);
     const { kept, moved } = L.splitDone(readLines(this.file(name)), today);
     if (moved.length) {
-      writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved));
-      appendEvent(this.dir, { type: 'archived', list: name, items: moved.map(r => L.stamp(r.replace(/^- \[x\] /, ''))), onDone: this.readList(name).onDone });
+      const onDone = this.readList(name).onDone;
+      appendThen(this.dir, { type: 'archived', list: name, items: moved.map(r => L.stamp(r.replace(/^- \[x\] /, ''))), onDone }, () => {
+        writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved));
+      });
     }
     return { archivedCount: moved.length, ...this.readList(name) };
   }

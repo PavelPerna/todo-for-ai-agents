@@ -4,7 +4,7 @@ const path = require('path');
 
 const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
 const i18n = require('./i18n');
-const { appendEvent } = require('./mcp/events');
+const { appendThen } = require('./mcp/events');
 
 function today() { return formatDate(new Date()); }
 
@@ -148,10 +148,12 @@ function markAll(list) {
 function hideDone(list) {
   const { kept, moved } = splitDone(readLines(list.file), today());
   if (!moved.length) return;
-  writeLines(list.file, kept);
-  writeLines(list.done, appendRows(readLines(list.done), `${list.name} — done`, moved));
   const onDone = (readLines(list.file).find(l => /^onDone:/i.test(l)) || '').replace(/^onDone:\s*/i, '');
-  appendEvent(path.dirname(list.file), { type: 'archived', list: list.name, items: moved.map(r => r.replace(/^- \[x\] /, '').replace(/\s*_\(hotovo [^)]*\)_\s*$/, '')), onDone });
+  // The event is the commit record: append it first, then move the rows (see mcp/events.js appendThen).
+  appendThen(path.dirname(list.file), { type: 'archived', list: list.name, items: moved.map(r => r.replace(/^- \[x\] /, '').replace(/\s*_\(hotovo [^)]*\)_\s*$/, '')), onDone }, () => {
+    writeLines(list.file, kept);
+    writeLines(list.done, appendRows(readLines(list.done), `${list.name} — done`, moved));
+  });
 }
 function undo(list, lineIndex) {
   const taken = takeRow(readLines(list.done), lineIndex);

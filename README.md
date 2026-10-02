@@ -34,10 +34,10 @@ Both are deliberately generic: the agent agrees an `onDone` with you per list, k
 
 `onDone` is the list's own contract (line 2 of `<name>.md`). An agent that sees an `archived` event performs it. Two ways to see events:
 
-- **Pull:** MCP tool `events({ since })` with the last `seq` you handled (0 = everything). Do this at session start.
-- **Push (be woken up):** watch the file. Claude Code can arm its `Monitor` tool on `tail -n0 -F .todo/.events.jsonl` and gets each line as a message the moment it is written (re-arm when the monitor expires or the session restarts). Other agents: any file watcher on `.events.jsonl`.
+- **Pull:** MCP tool `events({ since })` with the last `seq` you handled (0 = everything).
+- **Push (be woken up):** watch the file. Claude Code can arm its `Monitor` tool on `tail -n0 -F .todo/.events.jsonl`; other agents use any file watcher.
 
-The log is append-only and survives restarts; `seq` is the cursor. Nothing in the extension interprets `onDone`; that is the agent's job by design.
+Use them together, in this order, so nothing falls between the cracks: **arm the watcher first, then pull from your cursor** (anything archived before the watcher started is in that pull). Treat each notification as a trigger only: on every notification call `events({ since: cursor })` and process the result in `seq` order, then advance the cursor. Re-arm on expiry or after a restart and pull again right after re-arming. The log is append-only, `seq` is unique and ordered across writers (cross-process lock), and the event is written before the files move, so an event never goes missing for an archive that happened. Nothing in the extension interprets `onDone`; that is the agent's job by design.
 
 ## Driving the view from an agent (fallback without MCP)
 

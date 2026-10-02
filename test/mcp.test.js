@@ -49,6 +49,23 @@ test('archive appends an archived event with items and onDone; events(since) pag
   assert.deepEqual(new Store(tmp()).events(0), []);
 });
 
+test('events: two processes appending concurrently get unique, ordered seq', async () => {
+  const dir = tmp(); const script = `const {appendEvent}=require(${JSON.stringify(path.join(__dirname, '..', 'mcp', 'events.js'))});for(let i=0;i<25;i++)appendEvent(${JSON.stringify(dir)},{type:'done',list:process.argv[2],items:[]});`;
+  const run = tag => new Promise((res, rej) => { const c = spawn(process.execPath, ['-e', script, tag]); c.on('close', code => (code === 0 ? res() : rej(new Error('writer ' + tag + ' exit ' + code)))); });
+  await Promise.all([run('a'), run('b')]);
+  const seqs = new Store(dir).events(0).map(e => e.seq);
+  assert.equal(seqs.length, 50); assert.deepEqual(seqs, [...Array(50)].map((_, i) => i + 1));
+});
+
+test('archive: when the event cannot be appended nothing is moved, so a retry works', () => {
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g');
+  fs.mkdirSync(path.join(s.dir, '.events.lock')); // another writer holds the lock forever
+  assert.throws(() => s.archive('g', '2. 10. 2026'), /locked/);
+  assert.equal(s.readList('g').items.length, 1); assert.equal(s.readList('g').archived.length, 0);
+  fs.rmdirSync(path.join(s.dir, '.events.lock'));
+  assert.equal(s.archive('g', '2. 10. 2026').archivedCount, 1);
+});
+
 test('Store.show appends to .cmd', () => {
   const s = new Store(tmp()); s.createList('a', 'nothing'); s.show('a');
   assert.equal(fs.readFileSync(path.join(s.dir, '.cmd'), 'utf8'), 'show a\n');
