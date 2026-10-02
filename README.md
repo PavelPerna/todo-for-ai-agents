@@ -20,11 +20,24 @@ Both are deliberately generic: the agent agrees an `onDone` with you per list, k
 
 ## MCP server (preferred agent interface)
 
-`mcp/server.js` is a dependency-free MCP server (stdio) over the same `.todo/` files. Tools: `list_lists`, `read_list`, `create_list` (refuses without an `onDone`), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`. Errors come back to the agent as tool errors instead of warnings to the human.
+`mcp/server.js` is a dependency-free MCP server (stdio) over the same `.todo/` files. Tools: `list_lists`, `read_list`, `create_list` (refuses without an `onDone`), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`, `events`. Errors come back to the agent as tool errors instead of warnings to the human.
 
 - **VS Code (Copilot agent mode):** the extension registers the server automatically; it appears under MCP servers as "TODO Lists for AI Agents".
 - **Claude Code:** `claude mcp add todo -- node <extension dir>/mcp/server.js --dir <workspace>/.todo` (the extension dir is `~/.vscode-server/extensions/pavelperna.todo-for-ai-agents-<v>` or a clone of this repo).
 - **Anything else:** run `node mcp/server.js --dir <workspace>/.todo` as a stdio server.
+
+## Reacting to "done": the event log and onDone
+
+"Done" means archived: the human ticks items and presses archive (⇩), or an agent calls `archive`. At that moment the view (or the MCP server) appends one line to `.todo/.events.jsonl`:
+
+    {"seq":7,"at":"2026-10-02T19:40:12.345Z","type":"archived","list":"PR6","items":["Pavel: merge PR #6"],"onDone":"tick the PR6 item in list pavel, sync main, delete the branch"}
+
+`onDone` is the list's own contract (line 2 of `<name>.md`). An agent that sees an `archived` event performs it. Two ways to see events:
+
+- **Pull:** MCP tool `events({ since })` with the last `seq` you handled (0 = everything). Do this at session start.
+- **Push (be woken up):** watch the file. Claude Code can arm its `Monitor` tool on `tail -n0 -F .todo/.events.jsonl` and gets each line as a message the moment it is written (re-arm when the monitor expires or the session restarts). Other agents: any file watcher on `.events.jsonl`.
+
+The log is append-only and survives restarts; `seq` is the cursor. Nothing in the extension interprets `onDone`; that is the agent's job by design.
 
 ## Driving the view from an agent (fallback without MCP)
 

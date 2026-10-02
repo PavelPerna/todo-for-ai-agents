@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const L = require('../lib');
+const { appendEvent, readEvents } = require('./events');
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
@@ -71,7 +72,10 @@ class Store {
   archive(name, today = L.formatDate(new Date())) {
     this.assertExists(name);
     const { kept, moved } = L.splitDone(readLines(this.file(name)), today);
-    if (moved.length) { writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved)); }
+    if (moved.length) {
+      writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved));
+      appendEvent(this.dir, { type: 'archived', list: name, items: moved.map(r => L.stamp(r.replace(/^- \[x\] /, ''))), onDone: this.readList(name).onDone });
+    }
     return { archivedCount: moved.length, ...this.readList(name) };
   }
 
@@ -80,6 +84,9 @@ class Store {
     try { const j = JSON.parse(fs.readFileSync(path.join(this.dir, '.state'), 'utf8')); return { selected: j.selected || null, updatedAt: j.updatedAt || null }; }
     catch (_) { return { selected: null, updatedAt: null }; }
   }
+
+  /** Events after `since` (a seq from a previous call; 0 = all). Each: { seq, at, type: 'archived', list, items, onDone }. */
+  events(since = 0) { return readEvents(this.dir, Number(since) || 0); }
 
   show(name) {
     this.assertExists(name);

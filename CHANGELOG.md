@@ -1,6 +1,9 @@
 # Changelog
 
 
+## 1.3.0
+- Event log `.todo/.events.jsonl`: the view and the MCP server append `{seq, at, type: "archived", list, items, onDone}` whenever items are archived. MCP tool `events(since)` pages by `seq`. This is how an agent learns that a list is done and runs its onDone; the README shows how to subscribe (Claude Code: Monitor + `tail -F`).
+
 ## 1.2.0
 - `.todo/.state` records which list the human is looking at (written on every selection change); MCP tool `current_list` reads it. Agents no longer have to guess which list "the open one" is.
 ## 1.1.0

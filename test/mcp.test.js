@@ -37,6 +37,18 @@ test('Store.currentList reads .state and tolerates its absence', () => {
   assert.equal(s.currentList().selected, 'PR6');
 });
 
+test('archive appends an archived event with items and onDone; events(since) pages by seq', () => {
+  const s = new Store(tmp()); s.createList('garden', 'water the log', ['a', 'b']);
+  s.markAll('garden'); s.archive('garden', '2. 10. 2026');
+  const ev = s.events(0); assert.equal(ev.length, 1);
+  assert.equal(ev[0].seq, 1); assert.equal(ev[0].type, 'archived'); assert.equal(ev[0].list, 'garden');
+  assert.deepEqual(ev[0].items, ['a', 'b']); assert.equal(ev[0].onDone, 'water the log'); assert.ok(ev[0].at);
+  assert.deepEqual(s.events(1), []);
+  s.addItem('garden', 'c'); s.markAll('garden'); s.archive('garden', '3. 10. 2026');
+  assert.equal(s.events(1).length, 1); assert.equal(s.events(1)[0].seq, 2);
+  assert.deepEqual(new Store(tmp()).events(0), []);
+});
+
 test('Store.show appends to .cmd', () => {
   const s = new Store(tmp()); s.createList('a', 'nothing'); s.show('a');
   assert.equal(fs.readFileSync(path.join(s.dir, '.cmd'), 'utf8'), 'show a\n');
@@ -60,7 +72,7 @@ test('MCP server answers initialize, tools/list and tools/call over stdio', asyn
   assert.equal(msgs.length, 5);
   assert.equal(msgs[4].result.structuredContent.selected, 'trip');
   assert.equal(msgs[0].result.serverInfo.name, 'todo-for-ai-agents');
-  assert.equal(msgs[1].result.tools.length, 9);
+  assert.equal(msgs[1].result.tools.length, 10);
   assert.equal(msgs[2].result.structuredContent.items[0].text, 'book cabin');
   assert.equal(msgs[3].result.isError, true); assert.match(msgs[3].result.content[0].text, /no list named/);
   assert.ok(fs.existsSync(path.join(dir, 'trip.md')));

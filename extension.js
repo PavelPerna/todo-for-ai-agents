@@ -4,6 +4,7 @@ const path = require('path');
 
 const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
 const i18n = require('./i18n');
+const { appendEvent } = require('./mcp/events');
 
 function today() { return formatDate(new Date()); }
 
@@ -149,6 +150,8 @@ function hideDone(list) {
   if (!moved.length) return;
   writeLines(list.file, kept);
   writeLines(list.done, appendRows(readLines(list.done), `${list.name} — done`, moved));
+  const onDone = (readLines(list.file).find(l => /^onDone:/i.test(l)) || '').replace(/^onDone:\s*/i, '');
+  appendEvent(path.dirname(list.file), { type: 'archived', list: list.name, items: moved.map(r => r.replace(/^- \[x\] /, '').replace(/\s*_\(hotovo [^)]*\)_\s*$/, '')), onDone });
 }
 function undo(list, lineIndex) {
   const taken = takeRow(readLines(list.done), lineIndex);
