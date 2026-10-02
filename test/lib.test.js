@@ -75,3 +75,14 @@ test('markAllDone ticks every open task and reports the count', () => {
   assert.equal(r.changed, 2);
   assert.equal(L.markAllDone(['- [x] a']).changed, 0);
 });
+
+test('parseCommands reads show/markAll/archive lines, skips comments, reports unknown verbs', () => {
+  const buf = Buffer.from('# agent commands\nshow standup\nmarkall "PROJ-123"\narchive garden\nfrobnicate x\n\n');
+  const r = L.parseCommands(buf);
+  assert.deepEqual(r.ok, [{ verb: 'show', list: 'standup' }, { verb: 'markAll', list: 'PROJ-123' }, { verb: 'archive', list: 'garden' }]);
+  assert.deepEqual(r.bad, ['frobnicate x']);
+});
+test('parseCommands accepts a UTF-16LE file like .focus does', () => {
+  const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('archive standup\r\n', 'utf16le')]);
+  assert.deepEqual(L.parseCommands(buf).ok, [{ verb: 'archive', list: 'standup' }]);
+});

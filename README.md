@@ -4,7 +4,7 @@ Panel view rendering live todo lists that your AI coding agent (Claude Code, Git
 Ticking toggles `[ ]`/`[x]` in the file; "hide done" moves ticked items to `<name>.done.md` with a date;
 each list carries an `onDone:` header line the agent acts on when items land in `.done`.
 
-Build & install (WSL):
+Build & install (WSL): `./check.sh` runs the tests, a smoke load and the build in one go; or step by step:
 
     python3 build-vsix.py
     ~/.vscode-server/bin/*/bin/remote-cli/code --install-extension todo-for-ai-agents-<v>.vsix
@@ -18,10 +18,19 @@ Setting `agentTodo.dir` (default `.todo`) points the view at another directory i
 `agent/agent-instructions.md` is the same contract as a snippet for AGENTS.md, Copilot instructions or `.cursorrules`.
 Both are deliberately generic: the agent agrees an `onDone` with you per list, keeps items short, and acts on what you tick.
 
-## Switching the visible list from an agent
+## Driving the view from an agent
 
-- Command `agentTodo.showList` (argument: list name; without it a quick pick opens) focuses the panel and selects the list — for agents that can run VS Code commands.
-- Writing a list name into `.todo/.focus` does the same from a shell: `echo standup > .todo/.focus`. The file is consumed (deleted) once applied.
+Two equivalent interfaces, one for agents that can run VS Code commands, one for agents that only have a shell:
+
+| Action | VS Code command (argument: list name) | Shell: line in `.todo/.cmd` |
+| --- | --- | --- |
+| show a list | `agentTodo.showList` | `show <name>` |
+| tick every open item | `agentTodo.markAllDone` | `markAll <name>` |
+| archive ticked items to `<name>.done.md` | `agentTodo.archive` | `archive <name>` |
+
+`.todo/.cmd` may hold several lines; `#` starts a comment. The file is consumed (deleted) once applied, unknown verbs are reported in a warning. `.todo/.focus` with a bare list name still works as a shortcut for `show`. Both files accept UTF-8 or UTF-16 (PowerShell 5.1 `>`).
+
+    printf 'markAll PROJ-123\narchive PROJ-123\n' > .todo/.cmd
 
 ## Localization
 

@@ -8,7 +8,7 @@ Paste this into whatever file your agent reads at session start. Replace `.todo`
 - A list = `# <name>`, then `onDone: <what to do when an item is archived>`, then `- [ ]` / `- [x]` items. Agree the onDone with the human before creating a list.
 - On every state change of the work, update the matching list. Keep items short. Never un-tick a human's tick.
 - At session start, compare `.todo/*.done.md` with your last known state and perform the onDone of every new archived item. Outward actions (tickets, chat, PR comments) go out as drafts for approval.
-- Never write `.done.md` yourself; the view's "hide done" button does that.
+- Never write `.done.md` yourself. To act on a whole list write a line into `.todo/.cmd` (consumed once applied): `show <name>`, `markAll <name>`, `archive <name>`; or run the VS Code commands `agentTodo.showList` / `agentTodo.markAllDone` / `agentTodo.archive` with the list name.
 ```
 
 For Claude Code, you can instead copy `skills/todo-lists/` into `~/.claude/skills/` (personal) or `.claude/skills/` (project) and it becomes `/todo-lists`.

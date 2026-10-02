@@ -33,6 +33,18 @@ function focusName(buf) {
   return line.replace(/^["']|["']$/g, '');
 }
 
+/** Parse .cmd lines: `show <list>`, `markAll <list>`, `archive <list>`; unknown verbs are reported. */
+function parseCommands(buf) {
+  const ok = [], bad = [];
+  for (const raw of decodeText(buf).split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || line.startsWith('#')) continue;
+    const m = line.match(/^(show|markAll|archive)\s+(.+)$/i);
+    if (!m) { bad.push(line); continue; }
+    ok.push({ verb: m[1].replace(/^markall$/i, 'markAll').replace(/^show$/i, 'show').replace(/^archive$/i, 'archive'), list: m[2].trim().replace(/^["']|["']$/g, '') });
+  }
+  return { ok, bad };
+}
+
 /** Parse a list body into items the view draws. */
 function parseList(lines) {
   const items = [];
@@ -91,4 +103,4 @@ function takeRow(lines, index) {
   return { rest, row: `- [ ] ${stamp(m[3])}` };
 }
 
-module.exports = { TASK, esc, inline, formatDate, stamp, decodeText, focusName, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow };
+module.exports = { TASK, esc, inline, formatDate, stamp, decodeText, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow };
