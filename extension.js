@@ -177,14 +177,15 @@ function activate(context) {
   }
   const showList = async (name) => {
     if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: i18n.STRINGS[i18n.pick(vscode.env.language)].pickList }); if (!name) return; }
+    if (!lists().some(l => l.name === name)) { vscode.window.showWarningMessage(`Agent TODO: no list named "${name}"`); return; }
     await vscode.commands.executeCommand('agentTodo.view.focus');
     if (view) { refresh(); setTimeout(() => view.webview.postMessage({ type: 'select', name }), 50); }
   };
   const byName = name => lists().find(l => l.name === name);
   const runVerb = (verb, name) => {
     const list = byName(name);
-    if (verb === 'show') return showList(name);
     if (!list) { vscode.window.showWarningMessage(`Agent TODO: no list named "${name}"`); return; }
+    if (verb === 'show') return showList(name);
     if (verb === 'markAll') markAll(list); else if (verb === 'archive') hideDone(list);
     refresh();
   };

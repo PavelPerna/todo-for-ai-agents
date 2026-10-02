@@ -2,6 +2,7 @@
 
 
 ## 0.9.0
+- `show` (command, `.cmd` or `.focus`) on a list that does not exist shows a warning instead of silently doing nothing.
 - Agent interface for every action: commands `agentTodo.markAllDone`, `agentTodo.archive` (next to `showList`) and a `.todo/.cmd` file with `show|markAll|archive <name>` lines, consumed once applied. `.focus` stays as a shortcut for `show`.
 
 ## 0.8.0
