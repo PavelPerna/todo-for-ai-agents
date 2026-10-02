@@ -44,7 +44,7 @@ function html(webview, data, emptyNote, lang) {
  .lst:hover{background:var(--vscode-list-hoverBackground)} .lst.sel{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}
  .lst .n{opacity:.6;font-size:.85em} .lst .n.zero{opacity:.3} .lst .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
  .lst .act{all:unset;cursor:pointer;opacity:0;padding:0 4px;color:var(--vscode-textLink-foreground)} .lst:hover .act{opacity:.8} .lst .act:hover{opacity:1}
- .grp{padding:6px 8px 2px;font-size:.78em;letter-spacing:.04em;text-transform:uppercase;opacity:.5;cursor:default} summary.grp{cursor:pointer;list-style:none} summary.grp::-webkit-details-marker{display:none} details.done-grp .lst{opacity:.7}
+ .grp{padding:6px 8px 2px;font-size:.78em;letter-spacing:.04em;text-transform:uppercase;opacity:.5;cursor:default} summary.grp{cursor:pointer;list-style:none} summary.grp::-webkit-details-marker{display:none} details.done-grp .lst{opacity:.7} details.archive-grp .lst{opacity:.5}
  #right{flex:1;overflow:auto;padding:4px 12px;line-height:1.45}
  h2{font-size:1em;margin:6px 0 4px;color:var(--vscode-textLink-foreground)} h3{font-size:.9em;margin:6px 0 2px;opacity:.8}
  .ondone{font-size:.85em;opacity:.6;margin:0 0 6px;border-left:2px solid var(--vscode-panel-border);padding-left:6px}
@@ -63,7 +63,7 @@ function html(webview, data, emptyNote, lang) {
  const EMPTY = ${JSON.stringify(emptyNote)};
  const T = ${TJ};
  const fmt = (str, vars) => String(str).replace(/\\{(\\w+)\\}/g, (_, k) => (k in vars ? vars[k] : '{' + k + '}'));
- let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false }, vscode.getState() || {});
+ let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false, archiveOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
  function save() { vscode.setState(st); }
  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
@@ -77,12 +77,14 @@ function html(webview, data, emptyNote, lang) {
      return '<div class="lst' + (l.name === st.sel ? ' sel' : '') + '" data-name="' + esc(l.name) + '"><span class="nm">' + esc(l.name) + '</span>' + act + '<span class="n' + (l.open ? '' : ' zero') + '">' + l.open + '</span></div>';
    };
    const shown = DATA.filter(l => l.name.toLowerCase().includes(q));
-   const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0);
-   let out = '';
-   out += '<div class="grp">' + T.active + ' (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>');
-   out += '<details class="done-grp"' + (st.doneOpen ? ' open' : '') + '><summary class="grp">' + T.done + ' (' + done.length + ')</summary>' + (done.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>') + '</details>';
+   // Same three groups as the right pane: active (open items), done (ticked, not yet archived), archive (nothing left but the .done file, or empty).
+   const active = shown.filter(l => l.open > 0), done = shown.filter(l => l.open === 0 && l.checked > 0), archive = shown.filter(l => l.open === 0 && l.checked === 0);
+   const group = (cls, label, items, isOpen, stateKey) => '<details class="' + cls + '"' + (isOpen ? ' open' : '') + ' data-state="' + stateKey + '"><summary class="grp">' + label + ' (' + items.length + ')</summary>' + (items.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>') + '</details>';
+   let out = '<div class="grp">' + T.active + ' (' + active.length + ')</div>' + (active.map(row).join('') || '<div class="lst"><span class="empty">' + T.nothing + '</span></div>');
+   out += group('done-grp', T.done, done, st.doneOpen, 'doneOpen');
+   out += group('archive-grp', T.archive, archive, st.archiveOpen, 'archiveOpen');
    $('lists').innerHTML = out;
-   const dg = $('lists').querySelector('details.done-grp'); if (dg) dg.addEventListener('toggle', () => { st.doneOpen = dg.open; save(); });
+   for (const dg of $('lists').querySelectorAll('details[data-state]')) dg.addEventListener('toggle', () => { st[dg.dataset.state] = dg.open; save(); });
  }
  function drawRight() {
    const l = DATA.find(x => x.name === st.sel);
@@ -103,7 +105,7 @@ function html(webview, data, emptyNote, lang) {
    $('right').innerHTML = out.join('');
  }
  if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
- const selL = DATA.find(l => l.name === st.sel); if (selL && selL.open === 0) st.doneOpen = true;
+ const selL = DATA.find(l => l.name === st.sel); if (selL && selL.open === 0) { if (selL.checked > 0) st.doneOpen = true; else st.archiveOpen = true; }
  $('search').value = st.q; drawLeft(); drawRight();
  $('search').addEventListener('input', e => { st.q = e.target.value; save(); drawLeft(); });
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });

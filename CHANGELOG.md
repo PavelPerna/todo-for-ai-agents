@@ -4,6 +4,7 @@
 ## 0.8.0
 - The selected list uses the same **active / done** grouping as the list column, plus a collapsed **archive** section for `<name>.done.md`.
 - UI localized (en, cs) from `vscode.env.language`; strings live in `i18n.js`. The markdown data format is unchanged.
+- Left column has the same three groups as the right pane: active, done (ticked, not archived) and archive (only `.done` left, or empty).
 - List column hover actions: **mark all done** on an active list, **archive → .done** on a done list; the in-list button now also says "archive".
 
 ## 0.7.0
