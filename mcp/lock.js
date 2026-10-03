@@ -49,7 +49,7 @@ function withLock(dir, fn, timeoutMs = 3000) {
       catch (e) {
         if (!['ENOTEMPTY', 'EEXIST', 'EPERM'].includes(e.code)) throw e;
         const owner = readOwner(lock);
-        if (!owner || !alive(owner.pid)) { reclaim(dir, lock, owner); continue; }
+        if (owner && !alive(owner.pid)) reclaim(dir, lock, owner);
         if (Date.now() - start > timeoutMs) throw new Error('.todo is locked by another writer');
         sleepSync(10);
       }
