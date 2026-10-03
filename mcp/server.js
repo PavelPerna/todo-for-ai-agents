@@ -14,12 +14,13 @@ const name = { type: 'string', description: 'list name (file name without .md)' 
 const TOOLS = [
   { name: 'list_lists', description: 'All TODO lists with open/checked/archived counts and their onDone contract.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'read_list', description: 'One list: onDone, items (line, checked, text), archived items, raw markdown.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
-  { name: 'create_list', description: 'Create a list. onDone is required: agree it with the human first; "nothing" is valid.', inputSchema: { type: 'object', properties: { name, onDone: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['name', 'onDone'], additionalProperties: false } },
-  { name: 'add_item', description: 'Append one open item (one line of markdown) to a list.', inputSchema: { type: 'object', properties: { name, text: { type: 'string' } }, required: ['name', 'text'], additionalProperties: false } },
+  { name: 'create_list', description: 'Create a list. onDone (fires when an item is ticked) is required: agree it with the human first; "nothing" is valid. onArchive / onReopen are optional list defaults.', inputSchema: { type: 'object', properties: { name, onDone: { type: 'string' }, onArchive: { type: 'string' }, onReopen: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['name', 'onDone'], additionalProperties: false } },
+  { name: 'add_item', description: 'Append one open item (one line of markdown). Optional per-item hooks override the list defaults and are stored as (onDone="…", onArchive="…", onReopen="…") before the text.', inputSchema: { type: 'object', properties: { name, text: { type: 'string' }, onDone: { type: 'string' }, onArchive: { type: 'string' }, onReopen: { type: 'string' } }, required: ['name', 'text'], additionalProperties: false } },
   { name: 'set_checked', description: 'Tick or untick one item by its line number from read_list. Never untick what the human ticked unless asked.', inputSchema: { type: 'object', properties: { name, line: { type: 'integer' }, checked: { type: 'boolean' } }, required: ['name', 'line', 'checked'], additionalProperties: false } },
   { name: 'mark_all_done', description: 'Tick every open item. Only when the human said the whole list is done.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
+  { name: 'restore', description: 'Bring one archived item (line from read_list.archived) back as an open item; emits reopened.', inputSchema: { type: 'object', properties: { name, line: { type: 'integer' } }, required: ['name', 'line'], additionalProperties: false } },
   { name: 'archive', description: 'Move ticked items to <name>.done.md with a date. Use this instead of editing .done.md.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
-  { name: 'events', description: "Events after a seq cursor (0 = all), oldest first: {seq, at, type:'archived', list, items, onDone}. An archived event means the human finished those items: perform that list's onDone. Remember the last seq you handled.", inputSchema: { type: 'object', properties: { since: { type: 'integer', minimum: 0 } }, additionalProperties: false } },
+  { name: 'events', description: "Events after a seq cursor (0 = all), oldest first. v2: {seq, at, v, type: done|archived|reopened, list, items: string[] (texts), onDone (list default), details: [{text, hook, hooks}], listHooks}. done = ticked (hook = onDone), archived = moved to .done (onArchive), reopened = unticked/restored (onReopen). Perform details[].hook. Remember the last seq you handled.", inputSchema: { type: 'object', properties: { since: { type: 'integer', minimum: 0 } }, additionalProperties: false } },
   { name: 'current_list', description: 'Which list the human is looking at in the VS Code view right now (from .todo/.state); selected is null when unknown.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'show', description: 'Bring the list into view in VS Code (writes .todo/.cmd). Use when the human asked or a decision waits on them.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
 ];
@@ -29,10 +30,11 @@ function call(tool, a) {
   switch (tool) {
     case 'list_lists': return store.listLists();
     case 'read_list': return store.readList(a.name);
-    case 'create_list': return store.createList(a.name, a.onDone, a.items || []);
-    case 'add_item': return store.addItem(a.name, a.text);
+    case 'create_list': return store.createList(a.name, a.onDone, a.items || [], { onArchive: a.onArchive, onReopen: a.onReopen });
+    case 'add_item': return store.addItem(a.name, a.text, { onDone: a.onDone, onArchive: a.onArchive, onReopen: a.onReopen });
     case 'set_checked': return store.setChecked(a.name, a.line, a.checked);
     case 'mark_all_done': return store.markAll(a.name);
+    case 'restore': return store.restore(a.name, a.line);
     case 'archive': return store.archive(a.name);
     case 'events': return store.events(a.since || 0);
     case 'current_list': return store.currentList();
