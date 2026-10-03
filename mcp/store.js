@@ -3,7 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const L = require('../lib');
-const { appendThen, readEvents } = require('./events');
+const { readEvents } = require('./events');
+const ops = require('./ops');
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
@@ -71,14 +72,8 @@ class Store {
 
   archive(name, today = L.formatDate(new Date())) {
     this.assertExists(name);
-    const { kept, moved } = L.splitDone(readLines(this.file(name)), today);
-    if (moved.length) {
-      const onDone = this.readList(name).onDone;
-      appendThen(this.dir, { type: 'archived', list: name, items: moved.map(r => L.stamp(r.replace(/^- \[x\] /, ''))), onDone }, () => {
-        writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved));
-      });
-    }
-    return { archivedCount: moved.length, ...this.readList(name) };
+    const ev = ops.archive(this.dir, name, today);
+    return { archivedCount: ev ? ev.items.length : 0, ...this.readList(name) };
   }
 
   /** Which list the human currently sees in the view (from .todo/.state), or null when unknown. */

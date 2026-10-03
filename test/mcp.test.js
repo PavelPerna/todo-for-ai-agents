@@ -57,13 +57,36 @@ test('events: two processes appending concurrently get unique, ordered seq', asy
   assert.equal(seqs.length, 50); assert.deepEqual(seqs, [...Array(50)].map((_, i) => i + 1));
 });
 
-test('archive: when the event cannot be appended nothing is moved, so a retry works', () => {
+test('archive: when the event cannot be appended the files roll back, so a retry works', () => {
   const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g');
-  fs.mkdirSync(path.join(s.dir, '.events.lock')); // another writer holds the lock forever
-  assert.throws(() => s.archive('g', '2. 10. 2026'), /locked/);
+  const evp = path.join(s.dir, '.events.jsonl'); fs.writeFileSync(evp, ''); fs.chmodSync(evp, 0o444); // append will fail
+  if (process.getuid && process.getuid() === 0) { fs.chmodSync(evp, 0o644); return; } // root ignores modes
+  assert.throws(() => s.archive('g', '2. 10. 2026'), /EACCES|EPERM/);
   assert.equal(s.readList('g').items.length, 1); assert.equal(s.readList('g').archived.length, 0);
-  fs.rmdirSync(path.join(s.dir, '.events.lock'));
-  assert.equal(s.archive('g', '2. 10. 2026').archivedCount, 1);
+  fs.chmodSync(evp, 0o644);
+  assert.equal(s.archive('g', '2. 10. 2026').archivedCount, 1); assert.equal(s.events(0).length, 1);
+});
+
+test('archive: two processes archiving the same list concurrently move the rows once and emit one event', async () => {
+  const s = new Store(tmp()); s.createList('g', 'n', ['a', 'b']); s.markAll('g');
+  const script = `const {Store}=require(${JSON.stringify(path.join(__dirname, '..', 'mcp', 'store.js'))});new Store(${JSON.stringify(s.dir)}).archive('g','2. 10. 2026');`;
+  const run = () => new Promise((res, rej) => { const c = spawn(process.execPath, ['-e', script]); c.on('close', code => (code === 0 ? res() : rej(new Error('exit ' + code)))); });
+  await Promise.all([run(), run(), run()]);
+  const r = s.readList('g'); assert.equal(r.items.length, 0); assert.equal(r.archived.length, 2);
+  const ev = s.events(0).filter(e => e.type === 'archived'); assert.equal(ev.length, 1); assert.deepEqual(ev[0].items, ['a', 'b']);
+});
+
+test('lock: a dead owner is reclaimed, a live owner is waited for, a damaged log tail is isolated', () => {
+  const { withLock, LOCK } = require('../mcp/lock');
+  const dir = tmp(); const lock = path.join(dir, LOCK);
+  fs.mkdirSync(lock); fs.writeFileSync(path.join(lock, 'owner'), JSON.stringify({ pid: 999999, token: 'x' })); // no such process
+  assert.equal(withLock(dir, () => 'ok'), 'ok'); assert.equal(fs.existsSync(lock), false);
+  fs.mkdirSync(lock); fs.writeFileSync(path.join(lock, 'owner'), JSON.stringify({ pid: process.pid, token: 'other' })); // live owner (us), never released
+  assert.throws(() => withLock(dir, () => 'no', 200), /locked/); assert.equal(fs.existsSync(lock), true); fs.rmSync(lock, { recursive: true });
+  const st = new Store(dir); st.createList('g', 'n', ['a']);
+  fs.appendFileSync(path.join(dir, '.events.jsonl'), '{"seq":1,"type":"done","list":"g","ite'); // interrupted write, no newline
+  st.markAll('g'); st.archive('g', '2. 10. 2026');
+  const ev = st.events(0); assert.equal(ev.length, 1); assert.equal(ev[0].seq, 2); assert.equal(ev[0].type, 'archived');
 });
 
 test('Store.show appends to .cmd', () => {
