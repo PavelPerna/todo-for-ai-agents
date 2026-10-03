@@ -110,6 +110,7 @@ function html(webview, data, emptyNote, lang) {
  }
  if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
  const selL = DATA.find(l => l.name === st.sel); if (selL && selL.open === 0) { if (selL.checked > 0) st.doneOpen = true; else st.archiveOpen = true; }
+ save(); // persist the normalized selection too, so .state is right before any click
  $('search').value = st.q; drawLeft(); drawRight();
  $('search').addEventListener('input', e => { st.q = e.target.value; save(); drawLeft(); });
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });
@@ -128,8 +129,12 @@ function writeState(selected) {
   const d = dir(); if (!d || !fs.existsSync(d)) return;
   const p = path.join(d, '.state');
   const next = JSON.stringify({ selected: selected || null, updatedAt: new Date().toISOString() });
-  let prev = ''; try { prev = fs.readFileSync(p, 'utf8'); } catch (_) {}
-  if (!prev || JSON.parse(prev).selected !== (selected || null)) fs.writeFileSync(p, next);
+  let prevSelected; try { prevSelected = JSON.parse(fs.readFileSync(p, 'utf8')).selected || null; } catch (_) { prevSelected = undefined; } // missing or malformed: unknown, overwrite
+  if (prevSelected === undefined || prevSelected !== (selected || null)) {
+    // Atomic replace: the MCP server may read .state at any moment and must never see a truncated file.
+    const tmp = `${p}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, next); fs.renameSync(tmp, p);
+  }
 }
 function toggle(list, lineIndex) {
   const out = toggleLine(readLines(list.file), lineIndex);
@@ -186,7 +191,7 @@ function activate(context) {
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '*.md'));
     watcher.onDidChange(refresh); watcher.onDidCreate(refresh); watcher.onDidDelete(refresh);
     context.subscriptions.push(watcher);
-    try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
+    try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, (_, file) => { if (!file || String(file).endsWith('.md')) setTimeout(refresh, 60); }); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {} // lists only: .state/.cmd/.focus must not redraw the view
   }
   const showList = async (name) => {
     if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: i18n.STRINGS[i18n.pick(vscode.env.language)].pickList }); if (!name) return; }
