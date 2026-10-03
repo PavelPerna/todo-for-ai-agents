@@ -42,7 +42,7 @@ class Store {
     if (this.exists(name)) throw new Error(`list "${name}" already exists`);
     if (typeof onDone !== 'string' || !onDone.trim()) throw new Error('onDone is required: agree it with the human first ("nothing" is a valid answer)');
     fs.mkdirSync(this.dir, { recursive: true }); // first list in a fresh workspace: .todo/ does not exist yet
-    ops.editList(this.dir, name, () => [`# ${name}`, `onDone: ${onDone.trim()}`, '', ...items.map(t => `- [ ] ${t}`), '']);
+    ops.editList(this.dir, name, lines => { if (lines.length) throw new Error(`list "${name}" already exists`); return [`# ${name}`, `onDone: ${onDone.trim()}`, '', ...items.map(t => `- [ ] ${t}`), '']; }); // re-checked inside the lock
     return this.readList(name);
   }
 

@@ -1,7 +1,8 @@
 'use strict';
 // Append-only event log at <dir>/.events.jsonl, one JSON object per line, `seq` unique and ordered.
-// Writers (the view, the MCP server) are separate processes. Every list mutation and the event that
-// announces it run as one journaled transaction inside the directory lock:
+// Writers (the view, the MCP server) are separate processes. Every list mutation that moves rows, and the
+// event that announces it, run as one journaled transaction inside the directory lock (plain edits of one
+// list — add item, tick — are locked single atomic replacements and need no journal):
 //   1. the intent (writes + event, with a unique id) is written to <dir>/.journal, atomically;
 //   2. the files are replaced, atomically each;
 //   3. the event is appended;
@@ -27,7 +28,7 @@ function writeAtomic(p, text) {
   fs.writeFileSync(tmp, text); fs.renameSync(tmp, p);
 }
 
-function readLog(p) { try { return fs.readFileSync(p, 'utf8'); } catch (_) { return ''; } }
+function readLog(p) { try { return fs.readFileSync(p, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return ''; throw e; } }
 
 /** Lines of the log; a damaged unterminated tail is isolated so it cannot swallow the next record. */
 function repairTail(p) {
@@ -40,7 +41,9 @@ function repairTail(p) {
 function appendUnlocked(dir, event) {
   const p = eventsPath(dir);
   const lines = repairTail(p);
-  if (event.id && lines.some(l => l.includes(`"id":"${event.id}"`))) return JSON.parse(lines.find(l => l.includes(`"id":"${event.id}"`)));
+  if (event.id) {
+    for (const l of lines) { let rec; try { rec = JSON.parse(l); } catch (_) { continue; } if (rec.id === event.id) return rec; } // malformed lines never count as the record
+  }
   const full = { seq: lines.length + 1, at: new Date().toISOString(), id: event.id || crypto.randomUUID(), ...event };
   fs.appendFileSync(p, JSON.stringify(full) + '\n');
   return full;
@@ -49,8 +52,8 @@ function appendUnlocked(dir, event) {
 /** Complete a journaled transaction (idempotent). */
 function complete(dir, j) {
   for (const w of j.writes) writeAtomic(w.path, w.text);
-  const stored = appendUnlocked(dir, j.event);
-  try { fs.unlinkSync(journalPath(dir)); } catch (_) {}
+  const stored = j.event ? appendUnlocked(dir, j.event) : null;
+  try { fs.unlinkSync(journalPath(dir)); } catch (e) { if (e.code !== 'ENOENT') throw e; } // a journal that cannot be removed must block later mutations, or its replay would undo them
   return stored;
 }
 
@@ -84,14 +87,15 @@ function transact(dir, read, plan) {
     const snapshot = read();
     const op = plan(snapshot);
     if (!op) return null;
-    const j = { id: crypto.randomUUID(), writes: op.writes, event: { id: crypto.randomUUID(), ...op.event } };
+    const j = { id: crypto.randomUUID(), writes: op.writes, event: op.event ? { id: crypto.randomUUID(), ...op.event } : null };
     writeAtomic(journalPath(dir), JSON.stringify(j)); // intent is durable before anything changes
     return complete(dir, j);
   });
 }
 
-/** Events with seq > since (default 0), oldest first; malformed lines are skipped. */
+/** Events with seq > since (default 0), oldest first; malformed lines are skipped. Completes a pending journal first. */
 function readEvents(dir, since = 0) {
+  if (fs.existsSync(dir)) { try { withLock(dir, () => recoverUnlocked(dir)); } catch (e) { if (!/locked/.test(String(e))) throw e; } } // a busy lock just means a live writer is finishing it
   const text = readLog(eventsPath(dir));
   if (!text) return [];
   const out = [];

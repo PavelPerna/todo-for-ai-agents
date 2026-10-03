@@ -64,7 +64,7 @@ test('archive: when the event cannot be appended the journal survives and the ne
   const evp = path.join(s.dir, '.events.jsonl'); fs.writeFileSync(evp, ''); fs.chmodSync(evp, 0o444); // append will fail
   assert.throws(() => s.archive('g', '2. 10. 2026'), /EACCES|EPERM/);
   assert.equal(fs.existsSync(E.journalPath(s.dir)), true); // intent kept
-  assert.equal(s.events(0).length, 0);
+  assert.throws(() => s.events(0), /EACCES|EPERM/); // a reader surfaces the stuck journal instead of hiding it
   fs.chmodSync(evp, 0o644);
   s.addItem('g', 'b'); // next locked writer recovers: event appended, journal gone
   assert.equal(fs.existsSync(E.journalPath(s.dir)), false);
@@ -120,7 +120,60 @@ test('lock: stale directories without an owner are reclaimed exactly once and th
   await Promise.all([run(), run(), run(), run()]);
   assert.equal(fs.readFileSync(path.join(dir, 'hits'), 'utf8'), 'xxxx');
   assert.equal(fs.existsSync(path.join(dir, LOCK)), false);
-  assert.deepEqual(fs.readdirSync(dir).filter(f => f.startsWith('.lock')), []);
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f.startsWith('.lock') && !f.includes('.stale.')), []); // graves are swept after their TTL
+});
+
+test('recovery: a malformed log line carrying the journal id is ignored and the event is appended once', () => {
+  const E = require('../mcp/events');
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g');
+  fs.appendFileSync(path.join(s.dir, '.events.jsonl'), '{"seq":1,"id":"e1","type":"archi'); // interrupted record with the id
+  const j = { id: 'j1', writes: [{ path: path.join(s.dir, 'g.md'), text: '# g\nonDone: n\n' }, { path: path.join(s.dir, 'g.done.md'), text: '# g — done\n\n- [x] a _(hotovo 2. 10. 2026)_\n' }], event: { id: 'e1', type: 'archived', list: 'g', items: ['a'], onDone: 'n' } };
+  fs.writeFileSync(E.journalPath(s.dir), JSON.stringify(j));
+  const ev = s.events(0); // reading events recovers under the lock
+  assert.deepEqual(ev.map(e => [e.seq, e.id, e.type]), [[2, 'e1', 'archived']]);
+  assert.equal(fs.existsSync(E.journalPath(s.dir)), false); assert.equal(s.readList('g').archived.length, 1);
+});
+
+test('recovery: a journal that cannot be removed blocks later mutations instead of being replayed over them', () => {
+  const E = require('../mcp/events');
+  if (process.getuid && process.getuid() === 0) return;
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g'); s.archive('g', '2. 10. 2026');
+  const j = { id: 'j2', writes: [{ path: path.join(s.dir, 'g.md'), text: '# g\nonDone: n\n\n- [ ] stale\n' }], event: null };
+  fs.writeFileSync(E.journalPath(s.dir), JSON.stringify(j)); fs.chmodSync(s.dir, 0o555); // directory read-only: unlink of the journal fails
+  try { assert.throws(() => s.addItem('g', 'b'), /EACCES|EPERM/); } finally { fs.chmodSync(s.dir, 0o755); }
+  assert.equal(fs.existsSync(E.journalPath(s.dir)), true);
+  s.addItem('g', 'b'); // now the journal completes first, then the edit lands on top
+  assert.deepEqual(s.readList('g').items.map(i => i.text), ['stale', 'b']);
+});
+
+test('restore is journaled: a crash mid-move is completed by the next writer, with no event', () => {
+  const E = require('../mcp/events');
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g'); s.archive('g', '2. 10. 2026');
+  const n = s.events(0).length;
+  const j = { id: 'j3', writes: [{ path: path.join(s.dir, 'g.done.md'), text: '# g — done\n' }, { path: path.join(s.dir, 'g.md'), text: '# g\nonDone: n\n\n- [ ] a\n' }], event: null };
+  fs.writeFileSync(E.journalPath(s.dir), JSON.stringify(j));
+  s.addItem('g', 'b');
+  const r = s.readList('g'); assert.deepEqual(r.items.map(i => i.text), ['a', 'b']); assert.equal(r.archived.length, 0);
+  assert.equal(s.events(0).length, n);
+});
+
+test('createList rechecks existence inside the lock', () => {
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']);
+  assert.throws(() => s.createList('g', 'other'), /already exists/);
+  assert.deepEqual(s.readList('g').items.map(i => i.text), ['a']);
+});
+
+test('lock: a late reclaimer cannot move a live replacement lock', () => {
+  const { withLock, LOCK } = require('../mcp/lock');
+  const dir = tmp(); const lock = path.join(dir, LOCK);
+  // B saw a dead owner with token "dead"; meanwhile A reclaimed it (grave exists) and holds a live lock.
+  fs.mkdirSync(`${lock}.stale.dead`); fs.writeFileSync(path.join(`${lock}.stale.dead`, 'owner'), JSON.stringify({ pid: 999999, token: 'dead' }));
+  fs.mkdirSync(lock); fs.writeFileSync(path.join(lock, 'owner'), JSON.stringify({ pid: process.pid, token: 'live' }));
+  // B's reclaim attempt: rename lock → grave of the dead token must fail, leaving A's lock untouched
+  assert.throws(() => fs.renameSync(lock, `${lock}.stale.dead`));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(lock, 'owner'), 'utf8')).token, 'live');
+  fs.rmSync(lock, { recursive: true }); fs.rmSync(`${lock}.stale.dead`, { recursive: true });
+  assert.equal(withLock(dir, () => 'ok'), 'ok');
 });
 
 test('Store.show appends to .cmd', () => {
