@@ -59,7 +59,7 @@ function complete(dir, j) {
 
 /** Finish a transaction a previous writer left behind, if any; caller holds the lock. */
 function recoverUnlocked(dir) {
-  let j; try { j = JSON.parse(fs.readFileSync(journalPath(dir), 'utf8')); } catch (_) { return null; }
+  let j; try { j = JSON.parse(fs.readFileSync(journalPath(dir), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
   return complete(dir, j);
 }
 
