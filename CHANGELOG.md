@@ -1,5 +1,8 @@
 # Changelog
 
+
+## 1.2.0
+- `.todo/.state` records which list the human is looking at (written on every selection change); MCP tool `current_list` reads it. Agents no longer have to guess which list "the open one" is.
 ## 1.1.0
 - MCP server (`mcp/server.js`, stdio, no dependencies): tools `list_lists`, `read_list`, `create_list` (onDone required), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`. The extension registers it for VS Code MCP clients (Copilot agent mode); Claude Code and others add it with one command. `.cmd` and `.focus` stay as the zero-dependency fallback.
 - Requires VS Code 1.101+ (MCP server definition API).

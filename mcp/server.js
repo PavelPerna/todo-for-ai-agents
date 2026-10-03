@@ -19,6 +19,7 @@ const TOOLS = [
   { name: 'set_checked', description: 'Tick or untick one item by its line number from read_list. Never untick what the human ticked unless asked.', inputSchema: { type: 'object', properties: { name, line: { type: 'integer' }, checked: { type: 'boolean' } }, required: ['name', 'line', 'checked'], additionalProperties: false } },
   { name: 'mark_all_done', description: 'Tick every open item. Only when the human said the whole list is done.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
   { name: 'archive', description: 'Move ticked items to <name>.done.md with a date. Use this instead of editing .done.md.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
+  { name: 'current_list', description: 'Which list the human is looking at in the VS Code view right now (from .todo/.state); selected is null when unknown.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'show', description: 'Bring the list into view in VS Code (writes .todo/.cmd). Use when the human asked or a decision waits on them.', inputSchema: { type: 'object', properties: { name }, required: ['name'], additionalProperties: false } },
 ];
 
@@ -32,6 +33,7 @@ function call(tool, a) {
     case 'set_checked': return store.setChecked(a.name, a.line, a.checked);
     case 'mark_all_done': return store.markAll(a.name);
     case 'archive': return store.archive(a.name);
+    case 'current_list': return store.currentList();
     case 'show': return store.show(a.name);
     default: throw new Error(`unknown tool ${tool}`);
   }

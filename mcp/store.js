@@ -75,6 +75,12 @@ class Store {
     return { archivedCount: moved.length, ...this.readList(name) };
   }
 
+  /** Which list the human currently sees in the view (from .todo/.state), or null when unknown. */
+  currentList() {
+    try { const j = JSON.parse(fs.readFileSync(path.join(this.dir, '.state'), 'utf8')); return { selected: j.selected || null, updatedAt: j.updatedAt || null }; }
+    catch (_) { return { selected: null, updatedAt: null }; }
+  }
+
   show(name) {
     this.assertExists(name);
     fs.mkdirSync(this.dir, { recursive: true });

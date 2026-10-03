@@ -65,7 +65,7 @@ function html(webview, data, emptyNote, lang) {
  const fmt = (str, vars) => String(str).replace(/\\{(\\w+)\\}/g, (_, k) => (k in vars ? vars[k] : '{' + k + '}'));
  let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false, archiveOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
- function save() { vscode.setState(st); }
+ function save() { vscode.setState(st); vscode.postMessage({ act: 'selected', list: st.sel }); }
  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
@@ -110,6 +110,7 @@ function html(webview, data, emptyNote, lang) {
  }
  if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
  const selL = DATA.find(l => l.name === st.sel); if (selL && selL.open === 0) { if (selL.checked > 0) st.doneOpen = true; else st.archiveOpen = true; }
+ save(); // persist the normalized selection too, so .state is right before any click
  $('search').value = st.q; drawLeft(); drawRight();
  $('search').addEventListener('input', e => { st.q = e.target.value; save(); drawLeft(); });
  $('search').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = DATA.find(l => l.name.toLowerCase().includes(st.q.toLowerCase())); if (f) { st.sel = f.name; save(); drawLeft(); drawRight(); } } });
@@ -123,6 +124,18 @@ function html(webview, data, emptyNote, lang) {
 }
 
 function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
+// .todo/.state tells agents which list the human is looking at; written on every selection change.
+function writeState(selected) {
+  const d = dir(); if (!d || !fs.existsSync(d)) return;
+  const p = path.join(d, '.state');
+  const next = JSON.stringify({ selected: selected || null, updatedAt: new Date().toISOString() });
+  let prevSelected; try { prevSelected = JSON.parse(fs.readFileSync(p, 'utf8')).selected || null; } catch (_) { prevSelected = undefined; } // missing or malformed: unknown, overwrite
+  if (prevSelected === undefined || prevSelected !== (selected || null)) {
+    // Atomic replace: the MCP server may read .state at any moment and must never see a truncated file.
+    const tmp = `${p}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, next); fs.renameSync(tmp, p);
+  }
+}
 function toggle(list, lineIndex) {
   const out = toggleLine(readLines(list.file), lineIndex);
   if (out) writeLines(list.file, out);
@@ -159,6 +172,7 @@ function activate(context) {
       view = webviewView;
       webviewView.webview.options = { enableScripts: true };
       webviewView.webview.onDidReceiveMessage(msg => {
+        if (msg.act === 'selected') { writeState(msg.list); return; }
         const list = lists().find(l => l.name === msg.list);
         if (!list) return;
         if (msg.act === 'toggle') toggle(list, msg.line);
@@ -177,7 +191,7 @@ function activate(context) {
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(d, '*.md'));
     watcher.onDidChange(refresh); watcher.onDidCreate(refresh); watcher.onDidDelete(refresh);
     context.subscriptions.push(watcher);
-    try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, () => setTimeout(refresh, 60)); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {}
+    try { if (fs.existsSync(d)) { const w = fs.watch(d, { persistent: false }, (_, file) => { if (!file || String(file).endsWith('.md')) setTimeout(refresh, 60); }); context.subscriptions.push({ dispose: () => w.close() }); } } catch (_) {} // lists only: .state/.cmd/.focus must not redraw the view
   }
   const showList = async (name) => {
     if (!name) { name = await vscode.window.showQuickPick(lists().map(l => l.name), { placeHolder: i18n.STRINGS[i18n.pick(vscode.env.language)].pickList }); if (!name) return; }

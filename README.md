@@ -20,7 +20,7 @@ Both are deliberately generic: the agent agrees an `onDone` with you per list, k
 
 ## MCP server (preferred agent interface)
 
-`mcp/server.js` is a dependency-free MCP server (stdio) over the same `.todo/` files. Tools: `list_lists`, `read_list`, `create_list` (refuses without an `onDone`), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`. Errors come back to the agent as tool errors instead of warnings to the human.
+`mcp/server.js` is a dependency-free MCP server (stdio) over the same `.todo/` files. Tools: `list_lists`, `read_list`, `create_list` (refuses without an `onDone`), `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`. Errors come back to the agent as tool errors instead of warnings to the human.
 
 - **VS Code (Copilot agent mode):** the extension registers the server automatically; it appears under MCP servers as "TODO Lists for AI Agents".
 - **Claude Code:** `claude mcp add todo -- node <extension dir>/mcp/server.js --dir <workspace>/.todo` (the extension dir is `~/.vscode-server/extensions/pavelperna.todo-for-ai-agents-<v>` or a clone of this repo).
@@ -35,6 +35,8 @@ Two equivalent interfaces, one for agents that can run VS Code commands, one for
 | show a list | `agentTodo.showList` | `show <name>` |
 | tick every open item | `agentTodo.markAllDone` | `markAll <name>` |
 | archive ticked items to `<name>.done.md` | `agentTodo.archive` | `archive <name>` |
+
+The view also writes `.todo/.state` (`{"selected": "<name>", "updatedAt": ...}`) whenever the selected list changes, so an agent can tell which list the human means by "the open one" (MCP: `current_list`).
 
 `.todo/.cmd` may hold several lines; `#` starts a comment. The file is consumed (deleted) once applied, unknown verbs are reported in a warning. `.todo/.focus` with a bare list name still works as a shortcut for `show`. Both files accept UTF-8 or UTF-16 (PowerShell 5.1 `>`).
 

@@ -18,7 +18,7 @@ They tick items themselves. You fill the lists and react to what they ticked.
 
 ## Prefer the MCP tools
 
-If the `todo-for-ai-agents` MCP server is available (tools `list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`), use them instead of editing files: `create_list` enforces the onDone contract, errors come back to you, and `show` brings the list into view. The file format below is still the truth; edit files directly only when the MCP server is not configured.
+If the `todo-for-ai-agents` MCP server is available (tools `list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`), use them instead of editing files: `create_list` enforces the onDone contract, errors come back to you, and `show` brings the list into view. The file format below is still the truth; edit files directly only when the MCP server is not configured.
 
 ## Driving the view (fallback without MCP)
 
@@ -31,6 +31,10 @@ Three actions, each available as a VS Code command (argument: list name) or as a
 | move ticked items to `<name>.done.md` | `agentTodo.archive` | `archive <name>` |
 
 Use `show` when the human asked to see a list or a decision now waits on them, not on every edit. Use `markAll` only when the human said the whole list is done. Use `archive` instead of editing `.done.md` yourself; it keeps order and dates consistent. Shell example: `printf 'markAll PROJ-123\narchive PROJ-123\n' > .todo/.cmd`.
+
+## "The open list"
+
+When the human says "this list" or "the open one", do not guess: call `current_list` (MCP) or read `.todo/.state` (`selected`). It is written by the view on every selection change.
 
 ## Procedures
 
