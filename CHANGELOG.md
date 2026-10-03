@@ -2,6 +2,7 @@
 
 
 ## 1.3.0
+- Every writer (view and MCP) holds a cross-process lock; mutations that announce an event are journaled transactions (`.todo/.journal`): intent first, then files, then event, and whoever takes the lock next completes a transaction a crashed writer left behind, exactly once.
 - Event log `.todo/.events.jsonl`: the view and the MCP server append `{seq, at, type: "archived", list, items, onDone}` whenever items are archived. MCP tool `events(since)` pages by `seq`. This is how an agent learns that a list is done and runs its onDone; the README shows how to subscribe (Claude Code: Monitor + `tail -F`).
 
 ## 1.2.0

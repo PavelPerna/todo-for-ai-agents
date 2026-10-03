@@ -1,16 +1,22 @@
 'use strict';
-// List mutations shared by the view (extension.js) and the MCP server (store.js). Each one is a
-// transaction: read inside the lock, write atomically, append the event, roll back if the event fails.
+// List mutations shared by the view (extension.js) and the MCP server (store.js). Every writer goes
+// through here, so all of them hold the directory lock; the ones that announce an event are journaled
+// transactions (see events.js), the rest are plain locked read-modify-writes.
 const fs = require('fs');
 const path = require('path');
 const L = require('../lib');
-const { transact } = require('./events');
+const { transact, mutate, writeAtomic } = require('./events');
 
 function readLines(p) { try { return fs.readFileSync(p, 'utf8').split('\n'); } catch (_) { return []; } }
 const join = lines => lines.join('\n');
 const listFile = (dir, name) => path.join(dir, `${name}.md`);
 const doneFile = (dir, name) => path.join(dir, `${name}.done.md`);
 const listOnDone = lines => (lines.find(l => /^onDone:/i.test(l)) || '').replace(/^onDone:\s*/i, '');
+
+/** Locked read-modify-write of one list without an event: fn(lines) → new lines or null. */
+function editList(dir, name, fn) {
+  return mutate(dir, () => { const lines = readLines(listFile(dir, name)); const out = fn(lines); if (out) writeAtomic(listFile(dir, name), join(out)); return out; });
+}
 
 /** Move ticked rows of `name` to <name>.done.md stamped with `today`; returns the event or null. */
 function archive(dir, name, today = L.formatDate(new Date())) {
@@ -29,4 +35,14 @@ function archive(dir, name, today = L.formatDate(new Date())) {
     });
 }
 
-module.exports = { archive, readLines, listFile, doneFile };
+/** Bring archived row `index` back as an open item (no event in this version). */
+function restore(dir, name, index) {
+  return mutate(dir, () => {
+    const done = readLines(doneFile(dir, name)); const taken = L.takeRow(done, index); if (!taken) return null;
+    writeAtomic(doneFile(dir, name), join(taken.rest));
+    writeAtomic(listFile(dir, name), join(L.appendRows(readLines(listFile(dir, name)), name, [taken.row])));
+    return taken;
+  });
+}
+
+module.exports = { editList, archive, restore, readLines, listFile, doneFile };

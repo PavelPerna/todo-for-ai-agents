@@ -57,14 +57,21 @@ test('events: two processes appending concurrently get unique, ordered seq', asy
   assert.equal(seqs.length, 50); assert.deepEqual(seqs, [...Array(50)].map((_, i) => i + 1));
 });
 
-test('archive: when the event cannot be appended the files roll back, so a retry works', () => {
+test('archive: when the event cannot be appended the journal survives and the next writer completes it once', () => {
+  const E = require('../mcp/events');
   const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g');
+  if (process.getuid && process.getuid() === 0) return; // root ignores file modes
   const evp = path.join(s.dir, '.events.jsonl'); fs.writeFileSync(evp, ''); fs.chmodSync(evp, 0o444); // append will fail
-  if (process.getuid && process.getuid() === 0) { fs.chmodSync(evp, 0o644); return; } // root ignores modes
   assert.throws(() => s.archive('g', '2. 10. 2026'), /EACCES|EPERM/);
-  assert.equal(s.readList('g').items.length, 1); assert.equal(s.readList('g').archived.length, 0);
+  assert.equal(fs.existsSync(E.journalPath(s.dir)), true); // intent kept
+  assert.equal(s.events(0).length, 0);
   fs.chmodSync(evp, 0o644);
-  assert.equal(s.archive('g', '2. 10. 2026').archivedCount, 1); assert.equal(s.events(0).length, 1);
+  s.addItem('g', 'b'); // next locked writer recovers: event appended, journal gone
+  assert.equal(fs.existsSync(E.journalPath(s.dir)), false);
+  const ev = s.events(0); assert.equal(ev.length, 1); assert.equal(ev[0].type, 'archived'); assert.deepEqual(ev[0].items, ['a']);
+  assert.equal(s.readList('g').archived.length, 1);
+  assert.equal(s.archive('g', '2. 10. 2026').archivedCount, 0); // nothing left to move, no second event
+  assert.equal(s.events(0).length, 1);
 });
 
 test('archive: two processes archiving the same list concurrently move the rows once and emit one event', async () => {
@@ -87,6 +94,33 @@ test('lock: a dead owner is reclaimed, a live owner is waited for, a damaged log
   fs.appendFileSync(path.join(dir, '.events.jsonl'), '{"seq":1,"type":"done","list":"g","ite'); // interrupted write, no newline
   st.markAll('g'); st.archive('g', '2. 10. 2026');
   const ev = st.events(0); assert.equal(ev.length, 1); assert.equal(ev[0].seq, 2); assert.equal(ev[0].type, 'archived');
+});
+
+test('a crash between journal and completion is repaired by the next writer (files + event, once)', () => {
+  const E = require('../mcp/events');
+  const s = new Store(tmp()); s.createList('g', 'n', ['a']); s.markAll('g');
+  // simulate: intent journaled, process died before any write
+  const j = { id: 'j1', writes: [{ path: path.join(s.dir, 'g.md'), text: '# g\nonDone: n\n' }, { path: path.join(s.dir, 'g.done.md'), text: '# g — done\n\n- [x] a _(hotovo 2. 10. 2026)_\n' }], event: { id: 'e1', type: 'archived', list: 'g', items: ['a'], onDone: 'n' } };
+  fs.writeFileSync(E.journalPath(s.dir), JSON.stringify(j));
+  assert.equal(s.readList('g').items.length, 1); // nothing applied yet
+  s.addItem('g', 'b'); // any locked writer recovers first
+  const r = s.readList('g'); assert.equal(r.archived.length, 1); assert.deepEqual(r.items.map(i => i.text), ['b']);
+  assert.deepEqual(s.events(0).map(e => [e.id, e.type]), [['e1', 'archived']]);
+  assert.equal(fs.existsSync(E.journalPath(s.dir)), false);
+  // re-running the same journal is a no-op (idempotent event by id)
+  fs.writeFileSync(E.journalPath(s.dir), JSON.stringify(j)); s.addItem('g', 'c');
+  assert.equal(s.events(0).length, 1);
+});
+
+test('lock: stale directories without an owner are reclaimed exactly once and the winner proceeds', async () => {
+  const { withLock, LOCK } = require('../mcp/lock');
+  const dir = tmp(); fs.mkdirSync(path.join(dir, LOCK)); // foreign lock dir with no owner record
+  const script = `const {withLock}=require(${JSON.stringify(path.join(__dirname, '..', 'mcp', 'lock.js'))});withLock(${JSON.stringify(dir)},()=>{require('fs').appendFileSync(${JSON.stringify(path.join(dir, 'hits'))},'x');});`;
+  const run = () => new Promise((res, rej) => { const c = spawn(process.execPath, ['-e', script]); c.on('close', code => (code === 0 ? res() : rej(new Error('exit ' + code)))); });
+  await Promise.all([run(), run(), run(), run()]);
+  assert.equal(fs.readFileSync(path.join(dir, 'hits'), 'utf8'), 'xxxx');
+  assert.equal(fs.existsSync(path.join(dir, LOCK)), false);
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f.startsWith('.lock')), []);
 });
 
 test('Store.show appends to .cmd', () => {
