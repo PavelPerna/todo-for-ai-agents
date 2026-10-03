@@ -18,7 +18,7 @@ They tick items themselves. You fill the lists and react to what they ticked.
 
 ## Prefer the MCP tools
 
-If the `todo-for-ai-agents` MCP server is available (tools `list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`), use them instead of editing files: `create_list` enforces the onDone contract, errors come back to you, and `show` brings the list into view. The file format below is still the truth; edit files directly only when the MCP server is not configured.
+If the `todo-for-ai-agents` MCP server is available (tools `list_lists`, `read_list`, `create_list`, `add_item`, `set_checked`, `mark_all_done`, `archive`, `show`, `current_list`, `events`), use them instead of editing files: `create_list` enforces the onDone contract, errors come back to you, and `show` brings the list into view. The file format below is still the truth; edit files directly only when the MCP server is not configured.
 
 ## Driving the view (fallback without MCP)
 
@@ -42,7 +42,10 @@ When the human says "this list" or "the open one", do not guess: call `current_l
 
 **Update.** On every state change of the work (PR ready, review in, decision taken, blocked, finished) edit the items in the matching list: add, reword, or mark `[x]` when you completed it yourself. Keep items short; this is a status board, not a log. Never un-tick what the human ticked.
 
-**Process `.done` (start of session, then periodically).** Compare `*.done.md` with the last state you know. For every new item run the `onDone` of its list. Anything that leaves the machine (issue tracker, chat, PR comments) goes out as a draft for the human to approve.
+**React to "done" (the onDone contract).** Done = archived. Every archive appends an `archived` event to `.todo/.events.jsonl` (`{seq, at, list, items, onDone}`); the MCP tool `events({ since })` returns them after a `seq` cursor.
+- At session start, and after every re-arm: first arm the watcher (Claude Code: `Monitor` with `tail -n0 -F .todo/.events.jsonl`; other runtimes: a file watcher), **then** call `events({ since: cursor })` and perform each list's `onDone` in `seq` order; keep the cursor. Arming first means an archive that happens while you start up is caught by the pull.
+- A notification is a trigger, not the payload: on each one call `events({ since: cursor })` again and process in order. Do not poll `*.done.md` by hand.
+- Anything that leaves the machine (issue tracker, chat, PR comments) still goes out as a draft for the human to approve.
 
 **Delete a list.** When `<name>.md` is empty and the archive is no longer needed, remove both files after the human agrees.
 

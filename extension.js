@@ -2,8 +2,14 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
-const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow } = require('./lib');
+const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone } = require('./lib');
 const i18n = require('./i18n');
+const ops = require('./mcp/ops');
+const dirOf = list => path.dirname(list.file);
+function toggle(list, lineIndex) { ops.editList(dirOf(list), list.name, lines => toggleLine(lines, lineIndex)); }
+function markAll(list) { ops.editList(dirOf(list), list.name, lines => { const r = markAllDone(lines); return r.changed ? r.lines : null; }); }
+function hideDone(list) { ops.archive(dirOf(list), list.name); }
+function undo(list, lineIndex) { ops.restore(dirOf(list), list.name, lineIndex); }
 
 function today() { return formatDate(new Date()); }
 
@@ -123,7 +129,6 @@ function html(webview, data, emptyNote, lang) {
 </script></body></html>`;
 }
 
-function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
 // .todo/.state tells agents which list the human is looking at; written on every selection change.
 function writeState(selected) {
   const d = dir(); if (!d || !fs.existsSync(d)) return;
@@ -135,26 +140,6 @@ function writeState(selected) {
     const tmp = `${p}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, next); fs.renameSync(tmp, p);
   }
-}
-function toggle(list, lineIndex) {
-  const out = toggleLine(readLines(list.file), lineIndex);
-  if (out) writeLines(list.file, out);
-}
-function markAll(list) {
-  const r = markAllDone(readLines(list.file));
-  if (r.changed) writeLines(list.file, r.lines);
-}
-function hideDone(list) {
-  const { kept, moved } = splitDone(readLines(list.file), today());
-  if (!moved.length) return;
-  writeLines(list.file, kept);
-  writeLines(list.done, appendRows(readLines(list.done), `${list.name} — done`, moved));
-}
-function undo(list, lineIndex) {
-  const taken = takeRow(readLines(list.done), lineIndex);
-  if (!taken) return;
-  writeLines(list.done, taken.rest);
-  writeLines(list.file, appendRows(readLines(list.file), list.name, [taken.row]));
 }
 
 function activate(context) {

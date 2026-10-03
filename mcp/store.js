@@ -3,11 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const L = require('../lib');
+const { readEvents } = require('./events');
+const ops = require('./ops');
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 function readLines(p) { try { return fs.readFileSync(p, 'utf8').split('\n'); } catch (_) { return []; } }
-function writeLines(p, lines) { fs.writeFileSync(p, lines.join('\n')); }
 
 class Store {
   constructor(dir) { this.dir = dir; }
@@ -41,38 +42,34 @@ class Store {
     if (this.exists(name)) throw new Error(`list "${name}" already exists`);
     if (typeof onDone !== 'string' || !onDone.trim()) throw new Error('onDone is required: agree it with the human first ("nothing" is a valid answer)');
     fs.mkdirSync(this.dir, { recursive: true }); // first list in a fresh workspace: .todo/ does not exist yet
-    writeLines(this.file(name), [`# ${name}`, `onDone: ${onDone.trim()}`, '', ...items.map(t => `- [ ] ${t}`), '']);
+    ops.editList(this.dir, name, lines => { if (lines.length) throw new Error(`list "${name}" already exists`); return [`# ${name}`, `onDone: ${onDone.trim()}`, '', ...items.map(t => `- [ ] ${t}`), '']; }); // re-checked inside the lock
     return this.readList(name);
   }
 
   addItem(name, text) {
     this.assertExists(name);
     if (typeof text !== 'string' || !text.trim() || /\n/.test(text)) throw new Error('text must be one non-empty line');
-    writeLines(this.file(name), L.appendRows(readLines(this.file(name)), name, [`- [ ] ${text.trim()}`]));
+    ops.editList(this.dir, name, lines => L.appendRows(lines, name, [`- [ ] ${text.trim()}`]));
     return this.readList(name);
   }
 
   setChecked(name, line, checked) {
     this.assertExists(name);
-    const lines = readLines(this.file(name));
-    const m = (lines[line] || '').match(L.TASK);
-    if (!m) throw new Error(`line ${line} is not a task`);
-    if ((m[2] !== ' ') !== checked) writeLines(this.file(name), L.toggleLine(lines, line));
+    ops.editList(this.dir, name, lines => { const m = (lines[line] || '').match(L.TASK); if (!m) throw new Error(`line ${line} is not a task`); return (m[2] !== ' ') !== checked ? L.toggleLine(lines, line) : null; });
     return this.readList(name);
   }
 
   markAll(name) {
     this.assertExists(name);
-    const r = L.markAllDone(readLines(this.file(name)));
-    if (r.changed) writeLines(this.file(name), r.lines);
-    return { changed: r.changed, ...this.readList(name) };
+    let changed = 0;
+    ops.editList(this.dir, name, lines => { const r = L.markAllDone(lines); changed = r.changed; return r.changed ? r.lines : null; });
+    return { changed, ...this.readList(name) };
   }
 
   archive(name, today = L.formatDate(new Date())) {
     this.assertExists(name);
-    const { kept, moved } = L.splitDone(readLines(this.file(name)), today);
-    if (moved.length) { writeLines(this.file(name), kept); writeLines(this.doneFile(name), L.appendRows(readLines(this.doneFile(name)), `${name} — done`, moved)); }
-    return { archivedCount: moved.length, ...this.readList(name) };
+    const ev = ops.archive(this.dir, name, today);
+    return { archivedCount: ev ? ev.items.length : 0, ...this.readList(name) };
   }
 
   /** Which list the human currently sees in the view (from .todo/.state), or null when unknown. */
@@ -80,6 +77,9 @@ class Store {
     try { const j = JSON.parse(fs.readFileSync(path.join(this.dir, '.state'), 'utf8')); return { selected: j.selected || null, updatedAt: j.updatedAt || null }; }
     catch (_) { return { selected: null, updatedAt: null }; }
   }
+
+  /** Events after `since` (a seq from a previous call; 0 = all). Each: { seq, at, type: 'archived', list, items, onDone }. */
+  events(since = 0) { return readEvents(this.dir, Number(since) || 0); }
 
   show(name) {
     this.assertExists(name);
