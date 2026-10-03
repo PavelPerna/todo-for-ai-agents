@@ -20,7 +20,7 @@ test('focusName decodes UTF-16BE with BOM', () => {
 
 test('parseList classifies tasks, headings, onDone and text; title line is skipped', () => {
   const items = L.parseList(['# garden', 'onDone: log it', '', '- [ ] water', '- [x] prune', '## notes', 'plain', '- bullet']);
-  assert.deepEqual(items.map(i => i.kind), ['ondone', 'task', 'task', 'head', 'text', 'text']);
+  assert.deepEqual(items.map(i => i.kind), ['hook', 'task', 'task', 'head', 'text', 'text']);
   assert.equal(items[1].checked, false); assert.equal(items[1].i, 3);
   assert.equal(items[2].checked, true);
   assert.equal(items[0].html, 'log it');
@@ -85,4 +85,24 @@ test('parseCommands reads show/markAll/archive lines, skips comments, reports un
 test('parseCommands accepts a UTF-16LE file like .focus does', () => {
   const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('archive standup\r\n', 'utf16le')]);
   assert.deepEqual(L.parseCommands(buf).ok, [{ verb: 'archive', list: 'standup' }]);
+});
+
+test('parseAttrs/formatAttrs: typed hook block before the text, escapes, unknown keys kept aside', () => {
+  const a = L.parseAttrs('(onDone="notify", onArchive="check PRs", foo="x") Do a task 1');
+  assert.deepEqual(a.hooks, { onDone: 'notify', onArchive: 'check PRs' }); assert.deepEqual(a.other, { foo: 'x' }); assert.equal(a.text, 'Do a task 1');
+  assert.equal(L.formatAttrs({ onReopen: 'say "hi"' }, 'T'), '(onReopen="say \\"hi\\"") T');
+  assert.equal(L.parseAttrs(L.formatAttrs({ onReopen: 'say "hi"' }, 'T')).hooks.onReopen, 'say "hi"');
+  assert.deepEqual(L.parseAttrs('plain text (not attrs)'), { hooks: {}, other: {}, text: 'plain text (not attrs)' });
+  assert.equal(L.formatAttrs({}, 'T'), 'T');
+});
+test('listHooks + effectiveHooks: item overrides list default per key', () => {
+  const d = L.listHooks(['# l', 'onDone: list done', 'onarchive: list archive', '- [ ] x']);
+  assert.deepEqual(d, { onDone: 'list done', onArchive: 'list archive' });
+  assert.deepEqual(L.effectiveHooks({ onDone: 'mine' }, d), { onDone: 'mine', onArchive: 'list archive' });
+  assert.deepEqual(L.effectiveHooks({}, {}), {});
+});
+test('parseList strips the attribute block from the rendered text and exposes hooks; header hook lines are kind hook', () => {
+  const items = L.parseList(['# l', 'onDone: a', 'onReopen: r', '- [ ] (onDone="b") task']);
+  assert.deepEqual(items.map(i => i.kind), ['hook', 'hook', 'task']);
+  assert.equal(items[2].html, 'task'); assert.deepEqual(items[2].hooks, { onDone: 'b' });
 });

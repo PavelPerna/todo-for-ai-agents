@@ -4,14 +4,14 @@
 const STRINGS = {
   en: {
     active: 'active', done: 'done', archive: 'archive', search: 'search list…', nothing: 'nothing',
-    nothingOpen: 'nothing open', hideDone: 'archive done ({n}) → .done', markAll: 'mark all done', archiveList: 'archive → .done', onDone: 'onDone',
+    nothingOpen: 'nothing open', hideDone: 'archive done ({n}) → .done', markAll: 'mark all done', archiveList: 'archive → .done', hooksLabel: 'hooks', onDone: 'onDone',
     collapse: 'collapse / expand', tick: 'done', untick: 'untick', restore: 'restore to {name}',
     empty: '{dir} is empty — your agent writes lists there as <name>.md', noWorkspace: 'no workspace',
     pickList: 'List to show',
   },
   cs: {
     active: 'aktivní', done: 'hotové', archive: 'archiv', search: 'hledat list…', nothing: 'nic',
-    nothingOpen: 'nic otevřeného', hideDone: 'archivovat hotové ({n}) → .done', markAll: 'označit vše hotové', archiveList: 'archivovat → .done', onDone: 'onDone',
+    nothingOpen: 'nic otevřeného', hideDone: 'archivovat hotové ({n}) → .done', markAll: 'označit vše hotové', archiveList: 'archivovat → .done', hooksLabel: 'hooky', onDone: 'onDone',
     collapse: 'sbalit / rozbalit', tick: 'hotovo', untick: 'odškrtnout', restore: 'vrátit do {name}',
     empty: '{dir} je prázdný — agent sem zapisuje listy jako <name>.md', noWorkspace: 'žádný workspace',
     pickList: 'Který list zobrazit',

@@ -2,7 +2,7 @@
   "name": "todo-for-ai-agents",
   "displayName": "TODO Lists for AI Agents by Pavel Perna",
   "description": "Live, human-tickable TODO lists written by your AI coding agent (Claude Code, GitHub Copilot, Cursor, …) into .todo/*.md, shown in a VS Code panel. Each list carries an onDone contract. Independent project by Pavel Perna.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "PavelPerna",
   "author": {
     "name": "Pavel Perna"

@@ -2,14 +2,9 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
-const { TASK, esc, inline, formatDate, focusName, parseCommands, parseList, toggleLine, markAllDone } = require('./lib');
+const { TASK, esc, inline, formatDate, focusName, parseAttrs, parseCommands, parseList } = require('./lib');
 const i18n = require('./i18n');
 const ops = require('./mcp/ops');
-const dirOf = list => path.dirname(list.file);
-function toggle(list, lineIndex) { ops.editList(dirOf(list), list.name, lines => toggleLine(lines, lineIndex)); }
-function markAll(list) { ops.editList(dirOf(list), list.name, lines => { const r = markAllDone(lines); return r.changed ? r.lines : null; }); }
-function hideDone(list) { ops.archive(dirOf(list), list.name); }
-function undo(list, lineIndex) { ops.restore(dirOf(list), list.name, lineIndex); }
 
 function today() { return formatDate(new Date()); }
 
@@ -29,13 +24,15 @@ function readLines(p) { try { return fs.readFileSync(p, 'utf8').split('\n'); } c
 function listData(list) {
   const items = parseList(readLines(list.file));
   const done = [];
-  readLines(list.done).forEach((line, i) => { const m = line.match(TASK); if (m) done.push({ i, html: inline(m[3]) }); });
+  readLines(list.done).forEach((line, i) => { const m = line.match(TASK); if (m) { const a = parseAttrs(m[3]); done.push({ i, html: inline(a.text), hooks: a.hooks }); } });
   return { name: list.name, items, done: done.reverse(), open: items.filter(x => x.kind === 'task' && !x.checked).length, checked: items.filter(x => x.kind === 'task' && x.checked).length };
 }
 
 function html(webview, data, emptyNote, lang) {
   const T = i18n.STRINGS[lang];
-  const TJ = JSON.stringify(T);
+  // Workspace-controlled strings end up inside a <script>: escape so no value can terminate the tag or break the literal.
+  const js = v => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  const TJ = js(T);
   const nonce = String(Math.random()).slice(2);
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
@@ -53,7 +50,8 @@ function html(webview, data, emptyNote, lang) {
  .grp{padding:6px 8px 2px;font-size:.78em;letter-spacing:.04em;text-transform:uppercase;opacity:.5;cursor:default} summary.grp{cursor:pointer;list-style:none} summary.grp::-webkit-details-marker{display:none} details.done-grp .lst{opacity:.7} details.archive-grp .lst{opacity:.5}
  #right{flex:1;overflow:auto;padding:4px 12px;line-height:1.45}
  h2{font-size:1em;margin:6px 0 4px;color:var(--vscode-textLink-foreground)} h3{font-size:.9em;margin:6px 0 2px;opacity:.8}
- .ondone{font-size:.85em;opacity:.6;margin:0 0 6px;border-left:2px solid var(--vscode-panel-border);padding-left:6px}
+ .ondone{font-size:.85em;opacity:.6;margin:0 0 2px;border-left:2px solid var(--vscode-panel-border);padding-left:6px}
+ .hooks{all:unset;opacity:.45;cursor:pointer;margin-left:4px;font-size:.9em} .hooks:hover,.hooks:focus-visible{opacity:1;outline:1px solid var(--vscode-focusBorder)} .hookdetail{display:block;font-size:.8em;opacity:.65;margin:0 0 2px 1.9em;white-space:pre-wrap}
  .task{display:flex;gap:6px;align-items:flex-start;margin:2px 0} .task.checked{opacity:.55;text-decoration:line-through}
  .box{all:unset;cursor:pointer;width:1.3em;flex:none;color:var(--vscode-textLink-foreground)} .box:hover{color:var(--vscode-textLink-activeForeground)}
  .hide{all:unset;cursor:pointer;font-size:.85em;opacity:.7;margin:4px 0 2px 1.9em;color:var(--vscode-textLink-foreground)} .hide:hover{opacity:1}
@@ -65,14 +63,14 @@ function html(webview, data, emptyNote, lang) {
 <div id="right"></div>
 <script nonce="${nonce}">
  const vscode = acquireVsCodeApi();
- const DATA = ${JSON.stringify(data)};
- const EMPTY = ${JSON.stringify(emptyNote)};
+ const DATA = ${js(data)};
+ const EMPTY = ${js(emptyNote)};
  const T = ${TJ};
  const fmt = (str, vars) => String(str).replace(/\\{(\\w+)\\}/g, (_, k) => (k in vars ? vars[k] : '{' + k + '}'));
  let st = Object.assign({ sel: null, collapsed: false, q: '', doneOpen: false, archiveOpen: false }, vscode.getState() || {});
  const $ = id => document.getElementById(id);
  function save() { vscode.setState(st); vscode.postMessage({ act: 'selected', list: st.sel }); }
- function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
  function drawLeft() {
    document.body.classList.toggle('collapsed', st.collapsed); $('collapse').textContent = st.collapsed ? '▶' : '◀';
    const q = st.q.toLowerCase();
@@ -99,9 +97,10 @@ function html(webview, data, emptyNote, lang) {
  function drawRight() {
    const l = DATA.find(x => x.name === st.sel);
    if (!l) { $('right').innerHTML = '<p class="empty">' + esc(EMPTY) + '</p>'; return; }
-   const task = it => '<div class="task' + (it.checked ? ' checked' : '') + '"><button class="box" data-act="toggle" data-line="' + it.i + '" title="' + (it.checked ? T.untick : T.tick) + '">' + (it.checked ? '☑' : '☐') + '</button><span>' + it.html + '</span></div>';
+   const hooksBadge = h => { const ks = Object.keys(h || {}); if (!ks.length) return ''; const txt = ks.map(k => k + ': ' + h[k]).join('; '); return '<button class="hooks" data-act="hooks" aria-expanded="false" aria-label="' + esc(T.hooksLabel + ': ' + txt) + '" title="' + esc(txt) + '">⚙</button><span class="hookdetail" hidden>' + esc(txt) + '</span>'; };
+   const task = it => '<div class="task' + (it.checked ? ' checked' : '') + '"><button class="box" data-act="toggle" data-line="' + it.i + '" title="' + (it.checked ? T.untick : T.tick) + '">' + (it.checked ? '☑' : '☐') + '</button><span>' + it.html + '</span>' + hooksBadge(it.hooks) + '</div>';
    const out = ['<h2>' + esc(l.name) + '</h2>'];
-   for (const it of l.items) if (it.kind === 'ondone') out.push('<p class="ondone">' + T.onDone + ': ' + it.html + '</p>');
+   for (const it of l.items) if (it.kind === 'hook') out.push('<p class="ondone">' + esc(it.name) + ': ' + it.html + '</p>');
    const open = l.items.filter(it => it.kind === 'task' && !it.checked), checked = l.items.filter(it => it.kind === 'task' && it.checked);
    const notes = l.items.filter(it => it.kind === 'head' || it.kind === 'text');
    out.push('<div class="grp">' + T.active + ' (' + open.length + ')</div>');
@@ -111,7 +110,7 @@ function html(webview, data, emptyNote, lang) {
    out.push(checked.map(task).join('') || '<p class="empty">' + T.nothing + '</p>');
    if (checked.length) out.push('<button class="hide" data-act="hide">' + fmt(T.hideDone, { n: checked.length }) + '</button>');
    out.push('</details>');
-   if (l.done.length) { out.push('<details><summary class="grp">' + T.archive + ' (' + l.done.length + ')</summary>'); for (const d of l.done) out.push('<div class="task checked"><button class="box" data-act="undo" data-line="' + d.i + '" title="' + fmt(T.restore, { name: l.name }) + '">☑</button><span>' + d.html + '</span></div>'); out.push('</details>'); }
+   if (l.done.length) { out.push('<details><summary class="grp">' + T.archive + ' (' + l.done.length + ')</summary>'); for (const d of l.done) out.push('<div class="task checked"><button class="box" data-act="undo" data-line="' + d.i + '" title="' + esc(fmt(T.restore, { name: l.name })) + '">☑</button><span>' + d.html + '</span>' + hooksBadge(d.hooks) + '</div>'); out.push('</details>'); }
    $('right').innerHTML = out.join('');
  }
  if (!DATA.some(l => l.name === st.sel)) { const first = DATA.find(l => l.open > 0) || DATA[0]; st.sel = first ? first.name : null; }
@@ -125,7 +124,9 @@ function html(webview, data, emptyNote, lang) {
    const a = e.target.closest('button.act'); if (a) { e.stopPropagation(); vscode.postMessage({ act: a.dataset.act, list: a.dataset.list }); return; }
    const d = e.target.closest('.lst[data-name]'); if (!d) return; st.sel = d.dataset.name; save(); drawLeft(); drawRight(); });
  window.addEventListener('message', e => { const m = e.data || {}; if (m.type === 'select' && DATA.some(l => l.name === m.name)) { st.sel = m.name; st.q = ''; $('search').value = ''; save(); drawLeft(); drawRight(); } });
- $('right').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (!b) return; vscode.postMessage({ act: b.dataset.act, list: st.sel, line: Number(b.dataset.line) }); });
+ $('right').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (!b) return;
+   if (b.dataset.act === 'hooks') { const d = b.nextElementSibling; const open = d.hasAttribute('hidden'); if (open) d.removeAttribute('hidden'); else d.setAttribute('hidden', ''); b.setAttribute('aria-expanded', String(open)); return; }
+   vscode.postMessage({ act: b.dataset.act, list: st.sel, line: Number(b.dataset.line) }); });
 </script></body></html>`;
 }
 
@@ -141,6 +142,12 @@ function writeState(selected) {
     fs.writeFileSync(tmp, next); fs.renameSync(tmp, p);
   }
 }
+const dirOf = list => path.dirname(list.file);
+function toggle(list, lineIndex) { ops.toggle(dirOf(list), list.name, lineIndex); }
+function markAll(list) { ops.markAll(dirOf(list), list.name); }
+function hideDone(list) { ops.archive(dirOf(list), list.name); }
+function undo(list, lineIndex) { ops.restore(dirOf(list), list.name, lineIndex); }
+// .todo/.state tells agents which list the human is looking at; written on every selection change.
 
 function activate(context) {
   let view;

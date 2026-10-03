@@ -2,6 +2,9 @@
 // Pure helpers shared by extension.js and the tests. No vscode dependency.
 
 const TASK = /^(\s*[-*]\s+)\[([ xX])\]\s+(.*)$/;
+const HOOKS = ['onDone', 'onArchive', 'onReopen'];
+// Typed attribute block right after the checkbox: (onDone="…", onArchive="…", onReopen="…") text
+const ATTRS = /^\(\s*((?:\w+\s*=\s*"(?:[^"\\]|\\.)*"\s*,?\s*)+)\)\s*(.*)$/;
 
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
@@ -13,6 +16,38 @@ function inline(s) {
   s = s.replace(/(^|[^_])_([^_]+)_/g, '$1<em>$2</em>');
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   return s;
+}
+
+/** Split `(key="v", …) text` into { hooks, text }; unknown keys are kept in `other`. */
+function parseAttrs(raw) {
+  const m = String(raw).match(ATTRS);
+  if (!m) return { hooks: {}, other: {}, text: String(raw) };
+  const hooks = {}, other = {};
+  for (const kv of m[1].matchAll(/(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"/g)) {
+    const val = kv[2].replace(/\\(["\\])/g, '$1');
+    if (HOOKS.includes(kv[1])) hooks[kv[1]] = val; else other[kv[1]] = val;
+  }
+  return { hooks, other, text: m[2] };
+}
+
+/** Inverse of parseAttrs: `(onDone="…") text`, or just text when there are no hooks. */
+function formatAttrs(hooks, text) {
+  const parts = HOOKS.filter(k => hooks && hooks[k]).map(k => `${k}="${String(hooks[k]).replace(/(["\\])/g, '\\$1')}"`);
+  return parts.length ? `(${parts.join(', ')}) ${text}` : text;
+}
+
+/** List-level hook defaults from header lines `onDone: …`, `onArchive: …`, `onReopen: …`. */
+function listHooks(lines) {
+  const out = {};
+  for (const l of lines) { const m = l.match(/^(onDone|onArchive|onReopen):\s*(.*)$/i); if (m) out[HOOKS.find(h => h.toLowerCase() === m[1].toLowerCase())] = m[2].trim(); }
+  return out;
+}
+
+/** Effective hooks for one item: its own attributes over the list defaults. */
+function effectiveHooks(itemHooks, defaults) {
+  const out = {};
+  for (const k of HOOKS) { const v = (itemHooks && itemHooks[k]) || (defaults && defaults[k]); if (v) out[k] = v; }
+  return out;
 }
 
 function formatDate(d) { return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; }
@@ -50,10 +85,10 @@ function parseList(lines) {
   const items = [];
   lines.forEach((line, i) => {
     const m = line.match(TASK);
-    if (m) { items.push({ kind: 'task', i, checked: m[2] !== ' ', html: inline(m[3]) }); return; }
+    if (m) { const a = parseAttrs(m[3]); items.push({ kind: 'task', i, checked: m[2] !== ' ', html: inline(a.text), text: a.text, hooks: a.hooks }); return; }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) { if (i > 0) items.push({ kind: 'head', html: inline(h[2]) }); return; }
-    if (/^onDone:/i.test(line)) { items.push({ kind: 'ondone', html: inline(line.replace(/^onDone:\s*/i, '')) }); return; }
+    if (/^(onDone|onArchive|onReopen):/i.test(line)) { const mm = line.match(/^(\w+):\s*(.*)$/); items.push({ kind: 'hook', name: mm[1], html: inline(mm[2]) }); return; }
     if (line.trim()) items.push({ kind: 'text', html: inline(line.replace(/^\s*[-*]\s+/, '')) });
   });
   return items;
@@ -103,4 +138,4 @@ function takeRow(lines, index) {
   return { rest, row: `- [ ] ${stamp(m[3])}` };
 }
 
-module.exports = { TASK, esc, inline, formatDate, stamp, decodeText, focusName, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow };
+module.exports = { TASK, HOOKS, esc, inline, formatDate, stamp, decodeText, focusName, parseAttrs, formatAttrs, listHooks, effectiveHooks, parseCommands, parseList, toggleLine, markAllDone, splitDone, appendRows, takeRow };
